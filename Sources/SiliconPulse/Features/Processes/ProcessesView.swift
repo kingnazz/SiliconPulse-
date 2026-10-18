@@ -19,7 +19,6 @@ struct ProcessesView: View {
         \ProcessRow.diskReadSort: .diskRead,
         \ProcessRow.diskWriteSort: .diskWrite,
         \ProcessRow.runtimeSort: .runtime,
-        \ProcessRow.architecture: .architecture,
         \ProcessRow.userName: .user,
     ]
 
@@ -55,6 +54,11 @@ struct ProcessesView: View {
                         if row.isAI {
                             Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Theme.ai)
                                 .help("Part of a detected local AI workload")
+                        }
+                        // Architecture is only worth a column's width when it is unusual.
+                        if row.isRosetta {
+                            Text("Rosetta").font(.system(size: 9.5, weight: .medium)).foregroundStyle(Theme.caution)
+                                .help("Intel code running under Rosetta translation")
                         }
                     }
                 }
@@ -95,11 +99,6 @@ struct ProcessesView: View {
                     Text(row.runtime).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .width(min: 60, ideal: 70, max: 84)
-
-                TableColumn("Arch", value: \.architecture) { row in
-                    Text(row.architecture).foregroundStyle(row.isRosetta ? AnyShapeStyle(Theme.caution) : AnyShapeStyle(.tertiary))
-                }
-                .width(min: 44, ideal: 56, max: 72)
 
                 TableColumn("User", value: \.userName) { row in
                     Text(row.userName).foregroundStyle(.secondary).lineLimit(1)

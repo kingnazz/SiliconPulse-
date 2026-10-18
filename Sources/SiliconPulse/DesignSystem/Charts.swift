@@ -243,10 +243,9 @@ struct ActivityTimeline: View {
             let end = points.last?.time ?? Date().timeIntervalSinceReferenceDate
             let start = end - window.duration
             let barWidth = max(2, size.width / CGFloat(HistoryWindow.pointsPerWindow) - 1.5)
-            var baseline = Path()
-            baseline.move(to: CGPoint(x: 0, y: size.height - 0.5))
-            baseline.addLine(to: CGPoint(x: size.width, y: size.height - 0.5))
-            context.stroke(baseline, with: .color(Theme.grid), lineWidth: 1)
+            // A thin lane spanning the whole window, so a few recent bars still read as a timeline.
+            let lane = CGRect(x: 0, y: size.height - 3, width: size.width, height: 3)
+            context.fill(Path(roundedRect: lane, cornerRadius: 1.5), with: .color(Theme.track))
             for point in points where point.time >= start && point.maximum > 0 {
                 let x = CGFloat((point.time - start) / window.duration) * size.width
                 let active = point.maximum >= 1

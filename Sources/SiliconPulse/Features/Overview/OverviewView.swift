@@ -125,7 +125,7 @@ struct PrimaryMetrics: View {
     }
 
     private func gpuCaption(_ gpu: GPUSnapshot) -> String {
-        guard gpu.isAvailable else { return "Not reported by this Mac's GPU driver" }
+        guard gpu.isAvailable else { return "Not reported on this Mac" }
         if let memory = gpu.memoryInUse { return "Whole Mac · \(Format.bytes(memory)) in use" }
         return "Whole Mac"
     }
