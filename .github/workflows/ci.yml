@@ -39,11 +39,20 @@ jobs:
         run: swift build -c release 2>&1 | tee build.log
       - name: Warnings
         run: grep -E "warning:" build.log | sort -u || echo "No warnings"
+      - name: Start mock AI runners (test only)
+        run: |
+          python3 scripts/mock-runners.py > mock-runners.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:11434/api/ps > /dev/null && curl -sf http://127.0.0.1:8080/props > /dev/null
       - name: Test
+        env:
+          SILICONPULSE_MOCK_RUNNERS: "1"
         run: swift test 2>&1 | tee test.log
       - name: Bundle app
         run: scripts/build-app.sh
       - name: Smoke run and profile
+        env:
+          SILICONPULSE_EXPECT_AI: "1"
         run: scripts/profile-app.sh build/SiliconPulse.app profile
       - name: Upload app
         uses: actions/upload-artifact@v4

@@ -223,7 +223,12 @@ final class ProfileRunner {
             perProcessGPUSupported: engine.perProcessGPUSupported,
             processCount: processes.count,
             restrictedProcessCount: processes.filter { !$0.countersAvailable }.count,
-            aiWorkloads: engine.latestAI.workloads.map { "\($0.runner.displayName): \($0.state.label)" },
+            aiWorkloads: engine.latestAI.workloads.map { w in
+                var text = "\(w.runner.displayName): \(w.state.label)"
+                if let model = w.primaryModel { text += " · \(model.displayName)" }
+                text += " · " + (w.tokensPerSecond.value.map { Format.tokensPerSecond($0) } ?? "tok/s unavailable")
+                return text + " · " + w.activity.label
+            },
             problems: problems)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

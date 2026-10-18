@@ -67,3 +67,7 @@ done
 ls -la "$OUT"
 if [ "$STATUS" -ne 0 ]; then echo "SiliconPulse exited with status $STATUS"; cat "$OUT/app-stdout.log"; exit 1; fi
 if ! grep -q "Problems: none" "$OUT/report.md"; then echo "Profile reported problems"; exit 1; fi
+if [ "${SILICONPULSE_EXPECT_AI:-0}" = "1" ]; then
+  grep -q "Ollama: Running" "$OUT/report.md" && grep -q "llama.cpp: Running" "$OUT/report.md" \
+    || { echo "Expected the mock Ollama and llama-server runners to be detected"; exit 1; }
+fi
