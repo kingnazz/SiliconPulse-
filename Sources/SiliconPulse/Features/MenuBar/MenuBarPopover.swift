@@ -61,10 +61,15 @@ struct MenuBarPopover: View {
         }
         .padding(14)
         .frame(width: 290)
-        .background(WindowVisibilityReporter { visible, _ in
-            isVisible = visible
-            engine.setPopoverVisible(visible, token: ObjectIdentifier(token))
-        })
+        .background {
+            // ImageRenderer cannot draw AppKit views, so offscreen renders skip the tracker.
+            if !alwaysLive {
+                WindowVisibilityReporter { visible, _ in
+                    isVisible = visible
+                    engine.setPopoverVisible(visible, token: ObjectIdentifier(token))
+                }
+            }
+        }
     }
 
     private func popoverRow(_ label: String, _ value: String, fraction: Double?, color: Color) -> some View {

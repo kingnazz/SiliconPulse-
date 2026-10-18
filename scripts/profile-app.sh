@@ -29,14 +29,14 @@ echo "Launched SiliconPulse (pid $PID)"
 PS_LOGGER=$!
 
 # Call-tree samples of the app itself, taken while the dashboard is visible and while it is hidden.
-# Phase timing comes from ProfileRunner: overview 6–36 s, window closed ≈ 110–150 s.
+# Phase timing comes from ProfileRunner: overview 6–36 s, processes ≈ 68–88 s, window closed ≈ 110–150 s.
 take_sample() {
   local at="$1" name="$2"
   while [ "$(( $(date +%s) - START ))" -lt "$at" ]; do kill -0 "$PID" 2>/dev/null || return; sleep 1; done
   sample "$PID" 8 -file "$OUT/sample-$name.txt" > /dev/null 2>&1 || true
 }
 START=$(date +%s)
-( take_sample 14 overview; take_sample 118 hidden ) &
+( take_sample 14 overview; take_sample 74 processes; take_sample 118 hidden ) &
 SAMPLER=$!
 
 # The scripted run takes about three and a half minutes; stop it if it hangs.
