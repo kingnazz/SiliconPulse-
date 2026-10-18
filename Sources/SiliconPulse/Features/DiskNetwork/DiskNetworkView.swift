@@ -68,8 +68,8 @@ private struct DiskRow: View {
             ProcessIcon(sample: process, size: 14)
             Text(process.name).font(.system(size: 12)).lineLimit(1)
             Spacer()
-            Text("↓ " + Format.rate(process.diskReadBytesPerSecond ?? 0)).font(.numeric).frame(width: 90, alignment: .trailing)
-            Text("↑ " + Format.rate(process.diskWriteBytesPerSecond ?? 0)).font(.numeric).frame(width: 90, alignment: .trailing)
+            Text("R " + Format.rate(process.diskReadBytesPerSecond ?? 0)).font(.numeric).frame(width: 90, alignment: .trailing)
+            Text("W " + Format.rate(process.diskWriteBytesPerSecond ?? 0)).font(.numeric).frame(width: 90, alignment: .trailing)
         }
     }
 }

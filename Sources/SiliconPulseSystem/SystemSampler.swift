@@ -39,15 +39,17 @@ public actor SystemSampler {
     /// Fast tier: CPU, GPU, memory, disk, network, thermal.
     public func sampleSystem(previous: SystemSnapshot) -> SystemSnapshot {
         let now = Clock.uptimeNanoseconds()
-        let cpuSnapshot = measure("CPU") { cpu.sample() } ?? previous.cpu
+        let cpuSnapshot = measure("CPU") { cpu.sample() }
         let gpuSnapshot = measure("GPU") { gpu.sample() }
-        let memorySnapshot = measure("Memory") { memory.sample(now: now) } ?? previous.memory
+        let memorySnapshot = measure("Memory") { memory.sample(now: now) }
         let diskSnapshot = measure("Disk") { disk.sample(now: now) }
         let networkSnapshot = measure("Network") { network.sample(now: now) }
         let thermal = measure("Thermal") { power.thermalLevel() }
-        return SystemSnapshot(timestamp: Date(), cpu: cpuSnapshot, gpu: gpuSnapshot, memory: memorySnapshot,
-                              disk: diskSnapshot, network: networkSnapshot,
-                              thermal: ThermalSnapshot(level: thermal, power: lastPower))
+        var snapshot = SystemSnapshot.assemble(previous: previous, timestamp: Date(), cpu: cpuSnapshot, gpu: gpuSnapshot,
+                                               memory: memorySnapshot, disk: diskSnapshot, network: networkSnapshot,
+                                               thermal: thermal)
+        snapshot.thermal.power = lastPower
+        return snapshot
     }
 
     /// Slow tier: power source and battery.

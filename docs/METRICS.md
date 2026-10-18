@@ -145,7 +145,7 @@ refuses any other host.
 | Tier | Contents | Dashboard visible | Menu-bar popover open | Hidden (menu bar only) |
 |---|---|---|---|---|
 | Fast | CPU, memory, GPU utilization, disk, network, thermal | User setting (0.5 / 1 / 2 / 5 s, default 1 s) | User setting | max(setting, 2 s); 5 s when the menu bar shows no live values |
-| Processes | Process table, per-process GPU time | Setting (Processes screen), else max(setting, 2 s) | max(setting, 2 s) | 5 s |
+| Processes | Process table, per-process GPU time | max(setting, 2 s) on screens that show processes, else 5 s | max(setting, 2 s) | 5 s |
 | AI discovery | Candidate arguments, listening ports, runner API polling | 2 s on the AI screen, else 5 s | 5 s | 10 s |
 | Slow | Power source, battery | 10 s | 10 s | 30 s |
 

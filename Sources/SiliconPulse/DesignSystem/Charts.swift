@@ -148,18 +148,19 @@ struct ChartCard: View {
                         Text(emptyMessage).font(.system(size: 11)).foregroundStyle(.tertiary)
                     }
                 }
-            if series.count > 1 {
-                HStack(spacing: 10) {
-                    ForEach(series.indices, id: \.self) { index in
-                        HStack(spacing: 4) {
-                            RoundedRectangle(cornerRadius: 1)
-                                .fill(series[index].color.opacity(series[index].dashed ? 0.7 : 1))
-                                .frame(width: 10, height: 2)
-                            Text(series[index].label).font(.system(size: 10)).foregroundStyle(.secondary)
-                        }
+            // The legend row is always laid out (hidden for one series) so cards in a grid row match in height.
+            HStack(spacing: 10) {
+                ForEach(series.indices, id: \.self) { index in
+                    HStack(spacing: 4) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(series[index].color.opacity(series[index].dashed ? 0.7 : 1))
+                            .frame(width: 10, height: 2)
+                        Text(series[index].label).font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                 }
             }
+            .opacity(series.count > 1 ? 1 : 0)
+            .accessibilityHidden(series.count <= 1)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

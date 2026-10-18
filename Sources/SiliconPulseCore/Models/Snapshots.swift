@@ -326,9 +326,15 @@ public struct ThermalSnapshot: Equatable, Sendable {
 
 // MARK: System snapshot
 
+public enum SystemComponent: String, Sendable, CaseIterable {
+    case cpu, memory
+}
+
 /// Everything the fast tier produces in one pass.
 public struct SystemSnapshot: Equatable, Sendable {
     public var timestamp: Date
+    /// Components whose collector failed this pass; their values are carried over from the previous pass.
+    public var stale: Set<SystemComponent> = []
     public var cpu: CPUSnapshot
     public var gpu: GPUSnapshot
     public var memory: MemorySnapshot
@@ -349,4 +355,17 @@ public struct SystemSnapshot: Equatable, Sendable {
 
     public static let empty = SystemSnapshot(timestamp: .distantPast, cpu: .empty, gpu: .unavailable, memory: .empty,
                                              disk: .empty, network: .empty, thermal: .unknown)
+
+    /// Combines one pass of collector results. A collector that failed (nil) keeps its previous value and is
+    /// marked stale, so a transient failure neither blanks the UI nor passes old data off as fresh.
+    public static func assemble(previous: SystemSnapshot, timestamp: Date, cpu: CPUSnapshot?, gpu: GPUSnapshot,
+                                memory: MemorySnapshot?, disk: DiskSnapshot, network: NetworkSnapshot,
+                                thermal: ThermalLevel) -> SystemSnapshot {
+        var snapshot = SystemSnapshot(timestamp: timestamp, cpu: cpu ?? previous.cpu, gpu: gpu, memory: memory ?? previous.memory,
+                                      disk: disk, network: network,
+                                      thermal: ThermalSnapshot(level: thermal, power: previous.thermal.power))
+        if cpu == nil { snapshot.stale.insert(.cpu) }
+        if memory == nil { snapshot.stale.insert(.memory) }
+        return snapshot
+    }
 }

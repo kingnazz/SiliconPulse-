@@ -151,11 +151,14 @@ public struct MetricHistory: Sendable {
 
     public mutating func record(_ snapshot: SystemSnapshot) {
         let t = snapshot.timestamp
-        series[.cpu]?.append(snapshot.cpu.usage.total, at: t)
+        // Stale (carried-over) values are not recorded: a gap is more honest than a repeated value.
+        if !snapshot.stale.contains(.cpu) { series[.cpu]?.append(snapshot.cpu.usage.total, at: t) }
         if let gpu = snapshot.gpu.deviceUtilization { series[.gpu]?.append(gpu, at: t) }
-        series[.memoryUsed]?.append(Double(snapshot.memory.used), at: t)
-        series[.memoryCompressed]?.append(Double(snapshot.memory.compressed), at: t)
-        series[.swapUsed]?.append(Double(snapshot.memory.swapUsed), at: t)
+        if !snapshot.stale.contains(.memory) {
+            series[.memoryUsed]?.append(Double(snapshot.memory.used), at: t)
+            series[.memoryCompressed]?.append(Double(snapshot.memory.compressed), at: t)
+            series[.swapUsed]?.append(Double(snapshot.memory.swapUsed), at: t)
+        }
         series[.diskRead]?.append(snapshot.disk.readBytesPerSecond, at: t)
         series[.diskWrite]?.append(snapshot.disk.writeBytesPerSecond, at: t)
         series[.networkReceived]?.append(snapshot.network.receivedBytesPerSecond, at: t)

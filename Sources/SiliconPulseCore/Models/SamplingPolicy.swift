@@ -96,7 +96,9 @@ public enum SamplingPolicy {
         var schedule: SamplingSchedule
 
         if demand.dashboardVisible {
-            let processes = demand.section == .processes ? b : (demand.section.needsProcesses ? max(b, 2) : 5)
+            // The process table refreshes at most every 2 s: re-sorting ~500 NSTableView rows is by far the
+            // most expensive thing SiliconPulse draws (Activity Monitor defaults to 5 s).
+            let processes = demand.section.needsProcesses ? max(b, 2) : 5
             schedule = SamplingSchedule(system: b, processes: processes, aiDiscovery: demand.section == .ai ? 2 : 5, slow: 10)
         } else if demand.popoverVisible {
             schedule = SamplingSchedule(system: b, processes: max(b, 2), aiDiscovery: 5, slow: 10)

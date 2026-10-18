@@ -119,7 +119,7 @@ Sources/
 | | Window visible | Popover open | Hidden (menu bar only) |
 |---|---|---|---|
 | System metrics | setting (0.5 / 1 / 2 / 5 s, default 1 s) | setting | ≥ 2 s (5 s if the menu bar shows no values) |
-| Process table | setting on Processes, else ≥ 2 s | ≥ 2 s | 5 s |
+| Process table | max(setting, 2 s) on screens that show processes | ≥ 2 s | 5 s |
 | AI discovery | 2 s on AI Models, else 5 s | 5 s | 10 s |
 | Power source | 10 s | 10 s | 30 s |
 

@@ -21,7 +21,7 @@ struct TopMetricsStrip: View {
         let ready = engine.hasSystemSample
         HStack(spacing: 0) {
             MetricTile(label: "CPU", value: ready ? Format.fixed(s.cpu.usage.total * 100, 0) : "—", unit: "%",
-                       detail: "User \(Format.percent(s.cpu.usage.user)) · System \(Format.percent(s.cpu.usage.system))",
+                       detail: s.stale.contains(.cpu) ? "Last value · sampling failed" : "User \(Format.percent(s.cpu.usage.user)) · Sys \(Format.percent(s.cpu.usage.system))",
                        info: MetricCatalog.cpuTotal, tint: Theme.load(s.cpu.usage.total, base: .primary))
                 .padding(.horizontal, 16).stripDivider()
 
@@ -32,7 +32,7 @@ struct TopMetricsStrip: View {
 
             MetricTile(label: "Memory", value: ready ? Format.fixed(Double(s.memory.used) / 1_073_741_824, 1) : "—",
                        unit: "/ " + Format.fixed(Double(s.memory.total) / 1_073_741_824, 0) + " GB",
-                       detail: "\(Format.bytes(s.memory.available)) available",
+                       detail: s.stale.contains(.memory) ? "Last value · sampling failed" : "\(Format.bytes(s.memory.available)) available",
                        info: MetricCatalog.memoryUsed)
                 .padding(.horizontal, 16).stripDivider()
 
@@ -59,8 +59,8 @@ struct TopMetricsStrip: View {
 
     private func pressureDetail(_ memory: MemorySnapshot) -> String {
         if memory.isSwappingOut { return "Swapping now · \(Format.bytes(memory.swapUsed)) swap" }
-        if memory.swapUsed > 0 { return "Swap \(Format.bytes(memory.swapUsed)) · comp. \(Format.bytes(memory.compressed))" }
-        return "Compressed \(Format.bytes(memory.compressed)) · no swap"
+        if memory.swapUsed > 0 { return "Swap \(Format.bytes(memory.swapUsed))" }
+        return "\(Format.bytes(memory.compressed)) compressed"
     }
 }
 
