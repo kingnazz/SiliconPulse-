@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 import SiliconPulseCore
 import SiliconPulseSystem
 
@@ -51,15 +52,18 @@ final class IconCache {
     func icon(for sample: ProcessSample, points: CGFloat = 16) -> NSImage? {
         guard let path = sample.executablePath else { return nil }
         let side: CGFloat = points <= 20 ? 20 : 48
-        let key = "\(Int(side))|\(path)" as NSString
+        // Plain executables (most of the ~500 processes) all have the generic executable icon: one shared bitmap.
+        let appRange = path.range(of: ".app/Contents/MacOS/")
+        let isPlainExecutable = !sample.isApp && appRange == nil
+        let key = "\(Int(side))|\(isPlainExecutable ? "unix-executable" : path)" as NSString
         if let cached = icons.object(forKey: key) { return cached }
         let source: NSImage
         if sample.isApp, let app = NSRunningApplication(processIdentifier: sample.pid), let appIcon = app.icon {
             source = appIcon
-        } else if let range = path.range(of: ".app/Contents/MacOS/") {
-            source = NSWorkspace.shared.icon(forFile: String(path[..<range.lowerBound]) + ".app")
+        } else if let appRange {
+            source = NSWorkspace.shared.icon(forFile: String(path[..<appRange.lowerBound]) + ".app")
         } else {
-            source = NSWorkspace.shared.icon(forFile: path)
+            source = NSWorkspace.shared.icon(for: .unixExecutable)
         }
         let image = Self.rasterize(source, side: side)
         icons.setObject(image, forKey: key)

@@ -110,9 +110,22 @@ Captured with `--screenshots` in CI, in light and dark, at 920, 1180 and 1600 pt
 | Surfaces | Grey slabs, visible borders | A page color plus two translucent levels; hairline borders only on the emphasized AI hero |
 | Icon | Generic | A graphite die with pins and a pulse trace, the same mark as the menu-bar template image |
 
+### Release-candidate pass
+
+- **oMLX** has a first-class identity on AI Models, Overview and the popover: its own runner glyph, model name first, "1 of 3 models loaded", and its session-average tokens/sec labeled as such.
+- **Overview memory bar** now has a legend: the colored part is used memory (app, wired, compressed) and the grey remainder is cached files and free memory. A narrow window shows "Used" / "Cached & free".
+- **Settings** had a restrained native pass:
+  - section footers for explanations;
+  - a menu-bar preview drawn like the menu bar;
+  - custom endpoints in their own section;
+  - oMLX's port listed;
+  - stale ⓘ copy removed.
+- **History** shares one hover cursor across all charts.
+- **Popover** values scale down instead of overflowing for large-memory Macs. It is also captured by clicking the real status item.
+- **Captions** wrap to a second line instead of truncating at the minimum window width.
+
 ### Still worth more work
 
-- **Settings** is the stock grouped `Form`. It is native and readable but has not had the same typographic pass.
-- **Compute on a Mac with no GPU utilization or P/E data** (such as the CI virtual machine) is sparse. A real Apple Silicon Mac fills the GPU section and the cluster groups.
+- **Compute on a Mac with no GPU utilization or P/E data** (such as the CI virtual machine) is sparse; a physical Apple Silicon Mac fills both sections.
 - **Sidebar icons in dark captures** look dimmer than on a real display, because offscreen capture skips sidebar vibrancy.
-- **History** could share one hover rule across its three stacked charts.
+- **Real-display checks** are still open: popover hover states, Retina rendering and the popover's position. See `docs/VALIDATION.md`.
