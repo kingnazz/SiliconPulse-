@@ -23,15 +23,19 @@ It shows only what macOS (or the runner itself) actually exposes. Every value ha
 
 ## Screenshots
 
-These screenshots come from SiliconPulse's own `--profile` mode on a GitHub Actions macOS runner. That runner is an Apple M1 *virtual machine*, so there is no GPU utilization (the paravirtual GPU does not report it) and its CPU is busy with CI work. The local AI workloads shown are `scripts/mock-runners.py`, a test-only mock of the Ollama and llama-server APIs (the model names say "mock"), not real runners.
+These screenshots come from SiliconPulse's own `--screenshots` mode on a GitHub Actions macOS runner. That runner is an Apple M1 *virtual machine*, so there is no GPU utilization (the paravirtual GPU does not report it) and its CPU is busy with CI work. The local AI workloads shown are `scripts/mock-runners.py`, a test-only mock of the Ollama and llama-server APIs (the model names say "mock"), not real runners. The computer name is the runner's generated hostname.
 
-| Overview | AI Models |
+| Overview, dark | Overview, light |
 |---|---|
-| ![Overview](docs/screenshots/overview.png) | ![AI Models](docs/screenshots/ai.png) |
-| **Processes** | **Memory** |
-| ![Processes](docs/screenshots/processes.png) | ![Memory](docs/screenshots/memory.png) |
-| **Compute** | **Menu bar popover** |
-| ![Compute](docs/screenshots/compute.png) | ![Popover](docs/screenshots/menubar-popover.png) |
+| ![Overview, dark](docs/screenshots/overview-dark.png) | ![Overview, light](docs/screenshots/overview-light.png) |
+| **AI Models** | **Menu bar popover** |
+| ![AI Models](docs/screenshots/ai-dark.png) | ![Menu bar popover](docs/screenshots/menubar-popover-dark.png) ![Menu bar popover, light](docs/screenshots/menubar-popover-light.png) |
+| **Memory** | **Compute** |
+| ![Memory](docs/screenshots/memory-light.png) | ![Compute](docs/screenshots/compute-dark.png) |
+| **Processes** | **Disk & Network** |
+| ![Processes](docs/screenshots/processes-light.png) | ![Disk & Network](docs/screenshots/diskNetwork-dark.png) |
+
+Every screen is captured in both appearances, plus Overview at the minimum (920 pt) and a large (1600 pt) window size: see [`docs/screenshots/`](docs/screenshots). Regenerate them with `build/SiliconPulse.app/Contents/MacOS/SiliconPulse --screenshots <dir>`.
 
 ## Features
 
