@@ -19,6 +19,9 @@ public actor SystemSampler {
     /// Listening ports per candidate, rescanned at most every `portRescanInterval` seconds.
     private var portCache: [ProcessIdentity: (ports: [UInt16], time: UInt64)] = [:]
     private let portRescanInterval: UInt64 = 15_000_000_000
+    /// A candidate with no listening socket is checked again sooner: servers bind their port a few
+    /// seconds after they start (oMLX preloads models first), and until then they look unreachable.
+    private let emptyPortRescanInterval: UInt64 = 3_000_000_000
     /// Candidate classification never changes for a process, so it is decided once per PID + start time.
     private var candidateCache: [ProcessIdentity: Bool] = [:]
 
@@ -102,7 +105,8 @@ public actor SystemSampler {
     }
 
     private func listeningPorts(for identity: ProcessIdentity, now: UInt64) -> [UInt16] {
-        if let cached = portCache[identity], now &- cached.time < portRescanInterval { return cached.ports }
+        if let cached = portCache[identity],
+           now &- cached.time < (cached.ports.isEmpty ? emptyPortRescanInterval : portRescanInterval) { return cached.ports }
         let ports = Array(Set(processes.listeningSockets(pid: identity.pid).map(\.port))).sorted()
         portCache[identity] = (ports, now)
         return ports

@@ -51,7 +51,8 @@ struct OverviewHeader: View {
 
     private var machineLine: String {
         var parts: [String] = []
-        if let model = identity.modelName { parts.append(model) }
+        // The title already shows the model when it stands in for the computer name (screenshots).
+        if let model = identity.modelName, model != identity.computerName { parts.append(model) }
         let brand = engine.system.cpu.topology.brand
         if brand != CPUTopology.unknown.brand, !(identity.modelName ?? "").contains(brand) { parts.append(brand) }
         if engine.system.memory.total > 0 { parts.append(Format.bytes(engine.system.memory.total, decimals: 0)) }

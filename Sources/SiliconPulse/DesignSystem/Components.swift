@@ -253,7 +253,9 @@ struct MetricReadout: View {
                 }
             }
             if let caption {
-                Text(caption).font(.meta).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
+                // Two lines rather than truncation, so narrow windows keep the whole explanation.
+                Text(caption).font(.meta).foregroundStyle(.secondary).lineLimit(2).truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

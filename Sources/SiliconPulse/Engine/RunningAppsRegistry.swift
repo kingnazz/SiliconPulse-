@@ -72,12 +72,13 @@ final class IconCache {
                                          samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
                                          bytesPerRow: 0, bitsPerPixel: 0),
               let context = NSGraphicsContext(bitmapImageRep: rep) else { return source }
-        rep.size = NSSize(width: side, height: side)
+        // The context draws in pixels; the rep's point size is set afterwards for 2× display.
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
         context.imageInterpolation = .high
-        source.draw(in: NSRect(x: 0, y: 0, width: side, height: side), from: .zero, operation: .copy, fraction: 1)
+        source.draw(in: NSRect(x: 0, y: 0, width: pixels, height: pixels), from: .zero, operation: .copy, fraction: 1)
         NSGraphicsContext.restoreGraphicsState()
+        rep.size = NSSize(width: side, height: side)
         let image = NSImage(size: rep.size)
         image.addRepresentation(rep)
         return image

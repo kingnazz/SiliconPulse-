@@ -133,10 +133,13 @@ private struct SettingsFootnote: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
+        // Grouped-form footers are trailing-aligned by default; explanatory copy reads better from the left.
         Text(text)
             .font(.system(size: 11))
             .foregroundStyle(.secondary)
+            .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

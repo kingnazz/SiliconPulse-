@@ -25,7 +25,9 @@ final class ScreenshotRunner {
         // Let history and process deltas fill in, and give AI detection time to find the runners so
         // both appearances show the same state.
         await wait(14)
-        for _ in 0..<30 where engine.latestAI.workloads.isEmpty { await wait(1) }
+        for _ in 0..<30 where engine.latestAI.workloads.isEmpty || engine.latestAI.workloads.contains(where: { $0.state == .apiUnreachable }) {
+            await wait(1)
+        }
         if let window = AppWindows.mainWindow { Self.allowFramesBeyondScreen(window) }
         for (appearance, suffix) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
             NSApp.appearance = NSAppearance(named: appearance)
