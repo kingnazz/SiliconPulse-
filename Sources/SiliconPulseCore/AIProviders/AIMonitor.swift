@@ -63,6 +63,13 @@ public struct ThroughputTracker: Sendable {
             }
             return retained(id: id, now: now, source: "llama-server /slots")
         }
+
+        // A runner-reported average is real but not live: it moves only when a request completes.
+        if let average = counters.reportedAverageTokensPerSecond {
+            return Result(rate: Measured(average, quality: .systemReported, source: "\(runner.displayName) server status",
+                                         note: "Session average reported by \(runner.displayName)"),
+                          isLive: false, countersAdvanced: false)
+        }
         return unavailable
     }
 
@@ -116,7 +123,7 @@ public struct AIMonitorResult: Sendable {
 /// An actor so slow or failing local APIs never block system sampling or the UI.
 public actor AIMonitor {
     public static func defaultProviders() -> [AIProvider] {
-        [OllamaProvider(), LMStudioProvider(), LlamaCppProvider(), MLXProvider()]
+        [OllamaProvider(), LMStudioProvider(), LlamaCppProvider(), OMLXProvider(), MLXProvider()]
     }
 
     private let providers: [AIProvider]
@@ -168,7 +175,11 @@ public actor AIMonitor {
             }
         }
         let genericResult = await generic.detect(in: context, claimed: claimed)
-        workloads += genericResult.workloads.filter { w in !workloads.contains { $0.id == w.id } }
+        // A runner already identified by its own provider is not listed again as a generic endpoint.
+        let endpoints = Set(workloads.compactMap(\.endpoint))
+        workloads += genericResult.workloads.filter { w in
+            !workloads.contains { $0.id == w.id } && !(w.endpoint.map(endpoints.contains) ?? false)
+        }
 
         workloads = workloads.map { enrich($0, samples: context.samples, now: now) }
         workloads.sort(by: Self.displayOrder)
@@ -242,7 +253,7 @@ public actor AIMonitor {
             return .active(evidence: "llama-server reports a slot generating")
         }
         if (w.counters?.requestsProcessing ?? 0) > 0 {
-            return .active(evidence: "llama-server reports \(Int(w.counters!.requestsProcessing!)) request(s) processing")
+            return .active(evidence: "\(w.runner == .llamaCpp ? "llama-server" : w.runner.displayName) reports \(Int(w.counters!.requestsProcessing!)) request(s) processing")
         }
         if throughput.isLive {
             return .active(evidence: "Token counters advanced")

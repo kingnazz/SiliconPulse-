@@ -42,11 +42,15 @@ jobs:
       - name: Start mock AI runners (test only)
         run: |
           python3 scripts/mock-runners.py > mock-runners.log 2>&1 &
+          MOCK_OMLX_PORT=8765 PYTHONPATH=scripts/mock-omlx python3 -m omlx.cli serve > mock-omlx.log 2>&1 &
           sleep 2
           curl -sf http://127.0.0.1:11434/api/ps > /dev/null && curl -sf http://127.0.0.1:8080/props > /dev/null
+          curl -sf http://127.0.0.1:8765/health > /dev/null
+          ps -axo pid,comm,args | grep omlx.cli | grep -v grep
       - name: Test
         env:
           SILICONPULSE_MOCK_RUNNERS: "1"
+          SILICONPULSE_MOCK_OMLX: "1"
         run: swift test 2>&1 | tee test.log
       - name: Bundle app
         run: scripts/build-app.sh
@@ -84,6 +88,7 @@ jobs:
       - name: Start mock AI runners (test only)
         run: |
           python3 scripts/mock-runners.py > mock-runners.log 2>&1 &
+          MOCK_OMLX_PORT=8765 PYTHONPATH=scripts/mock-omlx python3 -m omlx.cli serve > mock-omlx.log 2>&1 &
           sleep 2
       - name: Capture screens
         run: |

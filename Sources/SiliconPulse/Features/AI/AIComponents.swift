@@ -26,7 +26,8 @@ struct WorkloadHeadline {
 
         // Throughput: only a measured value; otherwise say why there is none.
         if let tps = w.tokensPerSecond.value {
-            let caption = w.activity.isBusy ? "Generating now" : (w.tokensPerSecond.note ?? "Last generation")
+            // The note says what kind of figure this is (last generation, session average); live rates have none.
+            let caption = w.tokensPerSecond.note ?? (w.activity.isBusy ? "Generating now" : "Last generation")
             items.append(Item(label: "Tokens / sec", value: Format.fixed(tps, tps >= 100 ? 0 : 1), caption: caption,
                               info: MetricCatalog.aiTokensPerSecond, quality: w.tokensPerSecond.quality))
         } else {
@@ -63,6 +64,9 @@ struct WorkloadHeadline {
         self.items = items
 
         var details: [String] = []
+        if let available = w.availableModelCount, available > 1 {
+            details.append("\(w.models.count) of \(available) models loaded")
+        }
         if let context = model?.contextLength { details.append("Context \(Self.compactTokens(context))") }
         if let runtime = w.runtime(now: engine.system.timestamp), hasProcess { details.append("Up \(Format.duration(runtime))") }
         if let layers = model?.gpuLayers { details.append("\(layers) GPU layers") }
@@ -82,6 +86,7 @@ extension AIRunner {
         case .ollama: return "O"
         case .lmStudio: return "LM"
         case .llamaCpp: return "L"
+        case .omlx: return "oM"
         case .mlx: return "MX"
         case .pythonInference: return "Py"
         case .openAICompatible: return "AI"
@@ -143,7 +148,7 @@ struct ActiveModelHero: View {
                 ForEach(Array(headline.items.enumerated()), id: \.element.id) { index, item in
                     MetricReadout(label: item.label, value: item.value, unit: item.unit, caption: item.caption,
                                   info: item.info, quality: item.quality, valueFont: .metricLarge,
-                                  tint: index == 0 && workload.activity.isBusy && item.value != "—" ? Theme.ai : .primary)
+                                  tint: index == 0 && workload.liveTokensPerSecond != nil ? Theme.ai : .primary)
                         .padding(.trailing, 16)
                         .padding(.leading, index == 0 ? 0 : 16)
                         .overlay(alignment: .leading) {

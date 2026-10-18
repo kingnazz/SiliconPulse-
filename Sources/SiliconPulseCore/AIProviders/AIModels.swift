@@ -1,7 +1,7 @@
 import Foundation
 
 public enum AIRunner: String, CaseIterable, Sendable, Codable, Identifiable {
-    case ollama, lmStudio, llamaCpp, mlx, pythonInference, openAICompatible
+    case ollama, lmStudio, llamaCpp, omlx, mlx, pythonInference, openAICompatible
 
     public var id: String { rawValue }
 
@@ -10,6 +10,7 @@ public enum AIRunner: String, CaseIterable, Sendable, Codable, Identifiable {
         case .ollama: return "Ollama"
         case .lmStudio: return "LM Studio"
         case .llamaCpp: return "llama.cpp"
+        case .omlx: return "oMLX"
         case .mlx: return "MLX"
         case .pythonInference: return "Python inference"
         case .openAICompatible: return "OpenAI-compatible server"
@@ -135,20 +136,25 @@ public struct AIRuntimeCounters: Equatable, Sendable {
     public var tokensPredictedTotal: Double?
     /// llama.cpp `llamacpp:tokens_predicted_seconds_total`.
     public var tokensPredictedSecondsTotal: Double?
-    /// llama.cpp `llamacpp:requests_processing`.
+    /// Requests the runner says it is processing right now (llama.cpp `llamacpp:requests_processing`,
+    /// oMLX `active_requests`).
     public var requestsProcessing: Double?
     /// llama.cpp `/slots` decoded tokens per slot id (resets per request).
     public var slotDecoded: [Int: Int]?
     /// Any slot currently processing (llama.cpp `/slots`).
     public var anySlotProcessing: Bool?
+    /// The runner's own average generation speed over its session (oMLX `avg_generation_tps`).
+    /// Updated when requests complete, so it is shown as a session average, never as live throughput.
+    public var reportedAverageTokensPerSecond: Double?
 
     public init(tokensPredictedTotal: Double? = nil, tokensPredictedSecondsTotal: Double? = nil, requestsProcessing: Double? = nil,
-                slotDecoded: [Int: Int]? = nil, anySlotProcessing: Bool? = nil) {
+                slotDecoded: [Int: Int]? = nil, anySlotProcessing: Bool? = nil, reportedAverageTokensPerSecond: Double? = nil) {
         self.tokensPredictedTotal = tokensPredictedTotal
         self.tokensPredictedSecondsTotal = tokensPredictedSecondsTotal
         self.requestsProcessing = requestsProcessing
         self.slotDecoded = slotDecoded
         self.anySlotProcessing = anySlotProcessing
+        self.reportedAverageTokensPerSecond = reportedAverageTokensPerSecond
     }
 }
 
@@ -232,6 +238,8 @@ public struct AIWorkload: Identifiable, Equatable, Sendable {
     public var evidence: [String]
     public var counters: AIRuntimeCounters?
     public var startTime: TimeInterval?
+    /// Models the runner can serve, loaded or not, when it reports them (oMLX).
+    public var availableModelCount: Int?
 
     // Filled in by AIMonitor after detection.
     public var tokensPerSecond: Measured<Double>
@@ -260,6 +268,12 @@ public struct AIWorkload: Identifiable, Equatable, Sendable {
     }
 
     public var primaryModel: AIModelInfo? { models.first }
+
+    /// Tokens/sec measured from live counters while generating. Nil for runner-reported averages and past
+    /// rates, so compact surfaces (menu bar, rows) never show those as current throughput.
+    public var liveTokensPerSecond: Double? {
+        activity.isBusy && tokensPerSecond.quality == .calculated ? tokensPerSecond.value : nil
+    }
 
     public var title: String { primaryModel?.displayName ?? runner.displayName }
 

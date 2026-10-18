@@ -145,7 +145,7 @@ public enum MenuBarFormatter {
         if showAI, let featured, let model = featured.primaryModel {
             parts.append(model.shortName)
             if selected.contains(.gpu), let gpu = snapshot.gpu.deviceUtilization { parts.append("GPU " + Format.percent(gpu)) }
-            if let tps = featured.tokensPerSecond.value, featured.activity.isBusy {
+            if let tps = featured.liveTokensPerSecond {
                 parts.append(Format.fixed(tps, 0) + " tok/s")
             } else if selected.contains(.memory) {
                 parts.append("RAM " + Format.compactBytes(snapshot.memory.used))
@@ -162,7 +162,7 @@ public enum MenuBarFormatter {
             case .aiModel:
                 if !preferAI, let name = featured?.primaryModel?.shortName, featured?.state == .modelLoaded { parts.append(name) }
             case .tokensPerSecond:
-                if let tps = featured?.tokensPerSecond.value, featured?.activity.isBusy == true { parts.append(Format.fixed(tps, 0) + " tok/s") }
+                if let tps = featured?.liveTokensPerSecond { parts.append(Format.fixed(tps, 0) + " tok/s") }
             }
         }
         return parts.joined(separator: " · ")

@@ -139,6 +139,27 @@ final class SystemCollectorTests: XCTestCase {
         }
     }
 
+    /// Full pipeline against scripts/mock-omlx (`python3 -m omlx.cli serve`) on a non-default port:
+    /// real process scan, real argument and socket inspection, real HTTP.
+    func testDetectsOMLXProcessByTitleAndSocket() async throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SILICONPULSE_MOCK_OMLX"] == "1",
+                          "Set SILICONPULSE_MOCK_OMLX=1 with scripts/mock-omlx running")
+        let sampler = SystemSampler()
+        let monitor = AIMonitor(http: URLSessionLocalHTTPClient())
+        let processes = await sampler.sampleProcesses(apps: [:])
+        let candidates = await sampler.aiCandidates(from: processes)
+        let result = await monitor.refresh(candidates: candidates, samples: processes, probeDefaultPorts: false)
+
+        let w = try XCTUnwrap(result.workloads.first { $0.runner == .omlx }, "\(result.workloads.map(\.id))")
+        XCTAssertEqual(w.endpoint, "127.0.0.1:8765", "found through the listening socket, not the default port")
+        XCTAssertEqual(w.state, .modelLoaded)
+        XCTAssertEqual(w.primaryModel?.identifier, "mock-Qwen3-8B-4bit")
+        XCTAssertEqual(w.availableModelCount, 3)
+        XCTAssertFalse(w.primaryPIDs.isEmpty, "the server process is attributed")
+        XCTAssertNotNil(w.processMemory)
+        XCTAssertFalse(result.workloads.contains { $0.runner == .openAICompatible && $0.endpoint == w.endpoint })
+    }
+
     func testAIMonitorAgainstRealLoopbackHandlesNoRunners() async {
         // On CI nothing listens on the runner ports: detection must finish quickly and report nothing loaded.
         let monitor = AIMonitor(http: URLSessionLocalHTTPClient())

@@ -66,6 +66,7 @@ public enum AICandidateFilter {
     static let names: Set<String> = [
         "ollama", "ollama_llama_server", "lm studio", "llmster", "lms", "koboldcpp", "llamafile", "local-ai", "localai",
         "jan", "gpt4all", "vllm", "tabbyapi", "text-generation-launcher", "llama-swap", "lemonade", "msty",
+        "omlx", "omlx-server",
     ]
 
     public static func isCandidate(_ sample: ProcessSample) -> Bool {
@@ -76,6 +77,7 @@ public enum AICandidateFilter {
         if exe.hasPrefix("llama-") || exe.hasPrefix("llama.") || exe.hasPrefix("mlx") || exe.hasPrefix("lm studio") { return true }
         if let path = sample.executablePath {
             if path.contains("/LM Studio.app/") || path.contains("/Ollama.app/") || path.contains("/.lmstudio/") { return true }
+            if path.contains("/oMLX.app/") { return true }
             if exe == "server" && path.lowercased().contains("llama") { return true }
         }
         return false

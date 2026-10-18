@@ -7,6 +7,8 @@ final class MockHTTPClient: LocalHTTPClient, @unchecked Sendable {
         case json(String)
         case text(String)
         case status(Int)
+        /// A non-2xx status that still carries a JSON body (oMLX answers 503 with its health while preloading).
+        case statusJSON(Int, String)
         case timeout
     }
 
@@ -34,6 +36,8 @@ final class MockHTTPClient: LocalHTTPClient, @unchecked Sendable {
             return HTTPResponse(status: 200, body: Data(body.utf8))
         case .status(let code):
             return HTTPResponse(status: code, body: Data())
+        case .statusJSON(let code, let body):
+            return HTTPResponse(status: code, body: Data(body.utf8))
         case .timeout:
             throw LocalHTTPError.transport("timed out")
         case nil:

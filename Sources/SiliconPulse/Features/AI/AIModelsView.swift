@@ -54,7 +54,7 @@ private struct EmptyAIState: View {
             Text("Start a runner and it appears here within a few seconds. SiliconPulse only talks to runners on 127.0.0.1.")
                 .font(.body13).foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                ForEach(["Ollama", "LM Studio", "llama.cpp", "MLX", "vLLM", "OpenAI-compatible"], id: \.self) { name in
+                ForEach(["oMLX", "Ollama", "LM Studio", "llama.cpp", "MLX", "vLLM", "OpenAI-compatible"], id: \.self) { name in
                     Text(name).font(.meta).padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Theme.raised, in: Capsule())
                 }
@@ -105,6 +105,7 @@ private struct WorkloadSection: View {
         if !workload.tokensPerSecond.isAvailable && workload.counters == nil {
             switch workload.runner {
             case .llamaCpp: return "Start llama-server with --metrics (or keep /slots enabled) to see tokens/sec."
+            case .omlx: return "This oMLX server requires its API key for model and request details. SiliconPulse does not store API keys, so it reads only /health."
             default: return nil
             }
         }

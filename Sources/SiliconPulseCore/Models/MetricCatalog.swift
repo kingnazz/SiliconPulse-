@@ -126,10 +126,10 @@ public enum MetricCatalog {
 
     // AI
     public static let aiTokensPerSecond = MetricInfo(id: "ai.tps", title: "Tokens/sec", scope: .model, quality: .calculated,
-        source: "llama-server /metrics or /slots counter deltas",
-        note: "Only runners that expose generation counters can report this. Ollama, LM Studio and MLX do not.")
+        source: "llama-server /metrics or /slots counter deltas; oMLX /api/status session average",
+        note: "Only runners that expose generation counters can report a live rate. oMLX reports an average over its session, shown as such. Ollama, LM Studio and MLX expose neither.")
     public static let aiModelMemory = MetricInfo(id: "ai.modelMemory", title: "Model memory", scope: .model, quality: .systemReported,
-        source: "Runner API (Ollama size, LM Studio size_bytes)")
+        source: "Runner API (oMLX actual_size, Ollama size, LM Studio size_bytes)")
     public static let aiGPUOffload = MetricInfo(id: "ai.gpuOffload", title: "GPU offload", scope: .model, quality: .systemReported,
         source: "Ollama size_vram ÷ size, llama.cpp -ngl")
     public static let aiContext = MetricInfo(id: "ai.context", title: "Context", scope: .model, quality: .systemReported,

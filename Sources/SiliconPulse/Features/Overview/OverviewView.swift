@@ -257,7 +257,7 @@ struct OtherWorkloadRow: View {
             Text(workload.title).font(.label).lineLimit(1).truncationMode(.middle)
             Text(workload.runner.displayName).font(.meta).foregroundStyle(.secondary)
             Spacer()
-            if let tps = workload.tokensPerSecond.value, workload.activity.isBusy {
+            if let tps = workload.liveTokensPerSecond {
                 Text(Format.tokensPerSecond(tps)).font(.numericMedium)
             } else if let size = workload.primaryModel?.sizeBytes {
                 Text(Format.bytes(size)).font(.numeric).foregroundStyle(.secondary)

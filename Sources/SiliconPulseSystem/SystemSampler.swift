@@ -79,7 +79,9 @@ public actor SystemSampler {
             samples.filter(isCandidate).map { sample in
                 let args = sample.countersAvailable ? processes.arguments(for: sample.id) : nil
                 var environment: [String: String] = [:]
-                if let value = args?.environment["OLLAMA_HOST"] { environment["OLLAMA_HOST"] = value }
+                for key in ["OLLAMA_HOST", "OMLX_PORT"] {
+                    if let value = args?.environment[key] { environment[key] = value }
+                }
                 return AIProcessInfo(sample: sample, arguments: args?.arguments ?? [], environment: environment,
                                      listeningPorts: sample.countersAvailable ? listeningPorts(for: sample.id, now: now) : [])
             }

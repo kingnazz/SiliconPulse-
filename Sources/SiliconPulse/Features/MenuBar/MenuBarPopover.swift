@@ -120,10 +120,11 @@ private struct PopoverAISection: View {
                     HStack(spacing: 6) {
                         Text(workload.runner.displayName).foregroundStyle(.secondary)
                         Spacer(minLength: 4)
-                        if let tps = workload.tokensPerSecond.value {
-                            Text(Format.tokensPerSecond(tps))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(workload.activity.isBusy ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(.secondary))
+                        if let tps = workload.liveTokensPerSecond {
+                            Text(Format.tokensPerSecond(tps)).fontWeight(.semibold).foregroundStyle(Theme.ai)
+                        } else if let tps = workload.tokensPerSecond.value {
+                            // A past rate or a runner's session average: secondary, and labeled on hover.
+                            Text(Format.tokensPerSecond(tps)).foregroundStyle(.secondary)
                                 .help(workload.tokensPerSecond.note ?? "")
                         }
                         if let memory = workload.primaryModel?.sizeBytes ?? live.memory {
