@@ -5,21 +5,22 @@ struct ProcessesView: View {
     @Environment(MonitorEngine.self) private var engine
     @State private var search = ""
     @State private var filter: ProcessFilter = .all
-    @State private var sortOrder = [KeyPathComparator(\ProcessSample.cpuSortValue, order: .reverse)]
+    @State private var sortOrder = [KeyPathComparator(\ProcessRow.cpuSort, order: .reverse)]
     @State private var selection: ProcessIdentity?
     @State private var showInspector = false
 
-    private static let sortKeys: [PartialKeyPath<ProcessSample>: ProcessSortKey] = [
-        \ProcessSample.nameSortValue: .name,
-        \ProcessSample.pid: .pid,
-        \ProcessSample.cpuSortValue: .cpu,
-        \ProcessSample.memorySortValue: .memory,
-        \ProcessSample.threadSortValue: .threads,
-        \ProcessSample.diskReadSortValue: .diskRead,
-        \ProcessSample.diskWriteSortValue: .diskWrite,
-        \ProcessSample.runtimeSortValue: .runtime,
-        \ProcessSample.architectureSortValue: .architecture,
-        \ProcessSample.userName: .user,
+    /// Column key paths → core sort keys. Rows are sorted by `ProcessTable`, not by the Table itself.
+    private static let sortKeys: [PartialKeyPath<ProcessRow>: ProcessSortKey] = [
+        \ProcessRow.name: .name,
+        \ProcessRow.pid: .pid,
+        \ProcessRow.cpuSort: .cpu,
+        \ProcessRow.memorySort: .memory,
+        \ProcessRow.threadSort: .threads,
+        \ProcessRow.diskReadSort: .diskRead,
+        \ProcessRow.diskWriteSort: .diskWrite,
+        \ProcessRow.runtimeSort: .runtime,
+        \ProcessRow.architecture: .architecture,
+        \ProcessRow.userName: .user,
     ]
 
     private var query: ProcessQuery {
@@ -50,12 +51,12 @@ struct ProcessesView: View {
             .padding(.vertical, 8)
             Divider()
 
-            Table(rows, selection: $selection, sortOrder: $sortOrder) {
-                TableColumn("Process", value: \.nameSortValue) { p in
+            Table(rows.map { ProcessRow($0, now: now, isAI: aiPIDs.contains($0.pid)) }, selection: $selection, sortOrder: $sortOrder) {
+                TableColumn("Process", value: \.name) { row in
                     HStack(spacing: 6) {
-                        ProcessIcon(sample: p)
-                        Text(p.name).lineLimit(1).truncationMode(.middle)
-                        if aiPIDs.contains(p.pid) {
+                        ProcessIcon(sample: row.iconSample)
+                        Text(row.name).lineLimit(1).truncationMode(.middle)
+                        if row.isAI {
                             Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Theme.ai)
                                 .help("Part of a detected local AI workload")
                         }
@@ -63,49 +64,49 @@ struct ProcessesView: View {
                 }
                 .width(min: 170, ideal: 240)
 
-                TableColumn("PID", value: \.pid) { p in
-                    Text(String(p.pid)).font(.numeric).foregroundStyle(.secondary)
+                TableColumn("PID", value: \.pid) { row in
+                    Text(String(row.pid)).font(.numeric).foregroundStyle(.secondary)
                 }
                 .width(min: 44, ideal: 56, max: 70)
 
-                TableColumn("CPU %", value: \.cpuSortValue) { p in
-                    RestrictedText(p.cpuPercent.map(Format.processCPU), available: p.countersAvailable)
-                        .foregroundStyle((p.cpuPercent ?? 0) >= ProcessFilter.highCPUThreshold ? Theme.caution : .primary)
+                TableColumn("CPU %", value: \.cpuSort) { row in
+                    RestrictedText(row.cpu, available: row.countersAvailable)
+                        .foregroundStyle(row.isHighCPU ? Theme.caution : .primary)
                 }
                 .width(min: 52, ideal: 60, max: 80)
 
-                TableColumn("Memory", value: \.memorySortValue) { p in
-                    RestrictedText(p.memoryFootprint.map { Format.bytes($0) }, available: p.countersAvailable)
+                TableColumn("Memory", value: \.memorySort) { row in
+                    RestrictedText(row.memory, available: row.countersAvailable)
                 }
                 .width(min: 64, ideal: 78, max: 100)
 
-                TableColumn("Threads", value: \.threadSortValue) { p in
-                    RestrictedText(p.threadCount.map(String.init), available: p.countersAvailable)
+                TableColumn("Threads", value: \.threadSort) { row in
+                    RestrictedText(row.threads, available: row.countersAvailable)
                 }
                 .width(min: 46, ideal: 56, max: 70)
 
-                TableColumn("Disk Read", value: \.diskReadSortValue) { p in
-                    RestrictedText(p.diskReadBytesPerSecond.map(Format.rate), available: p.countersAvailable)
+                TableColumn("Disk Read", value: \.diskReadSort) { row in
+                    RestrictedText(row.diskRead, available: row.countersAvailable)
                 }
                 .width(min: 64, ideal: 78, max: 100)
 
-                TableColumn("Disk Write", value: \.diskWriteSortValue) { p in
-                    RestrictedText(p.diskWriteBytesPerSecond.map(Format.rate), available: p.countersAvailable)
+                TableColumn("Disk Write", value: \.diskWriteSort) { row in
+                    RestrictedText(row.diskWrite, available: row.countersAvailable)
                 }
                 .width(min: 64, ideal: 78, max: 100)
 
-                TableColumn("Runtime", value: \.runtimeSortValue) { p in
-                    Text(p.startTime > 0 ? Format.duration(p.runtime(now: now)) : "—").font(.numeric).foregroundStyle(.secondary)
+                TableColumn("Runtime", value: \.runtimeSort) { row in
+                    Text(row.runtime).font(.numeric).foregroundStyle(.secondary)
                 }
                 .width(min: 60, ideal: 72, max: 96)
 
-                TableColumn("Arch", value: \.architectureSortValue) { p in
-                    Text(p.architecture.label).foregroundStyle(p.architecture == .rosetta ? Theme.caution : .secondary)
+                TableColumn("Arch", value: \.architecture) { row in
+                    Text(row.architecture).foregroundStyle(row.isRosetta ? Theme.caution : .secondary)
                 }
                 .width(min: 50, ideal: 64, max: 110)
 
-                TableColumn("User", value: \.userName) { p in
-                    Text(p.userName).foregroundStyle(.secondary).lineLimit(1)
+                TableColumn("User", value: \.userName) { row in
+                    Text(row.userName).foregroundStyle(.secondary).lineLimit(1)
                 }
                 .width(min: 50, ideal: 80, max: 140)
             }
@@ -149,7 +150,8 @@ struct ProcessesView: View {
             }
         }
         .onChange(of: selection) { _, newValue in
-            engine.inspect(newValue)
+            // Defer: changing observed state inside the table's selection callback is reentrant for NSTableView.
+            Task { @MainActor in engine.inspect(newValue) }
             if newValue != nil { showInspector = true }
         }
         .onAppear {
@@ -205,8 +207,56 @@ struct RestrictedText: View {
     }
 }
 
-extension ProcessSample {
-    /// Ascending runtime is descending start time, so the key is the negated start time.
-    var runtimeSortValue: TimeInterval { -startTime }
-    var architectureSortValue: String { architecture.rawValue }
+/// What one table row displays. Values are pre-formatted at display precision, so rows whose visible
+/// values did not change compare equal and SwiftUI leaves their cells alone; most processes are idle,
+/// so this keeps a 500-row table cheap to refresh every second.
+struct ProcessRow: Identifiable, Equatable {
+    let id: ProcessIdentity
+    let pid: Int32
+    let name: String
+    let iconSample: ProcessSample
+    let isAI: Bool
+    let countersAvailable: Bool
+    let cpu: String?
+    let isHighCPU: Bool
+    let memory: String?
+    let threads: String?
+    let diskRead: String?
+    let diskWrite: String?
+    let runtime: String
+    let architecture: String
+    let isRosetta: Bool
+    let userName: String
+    // Sort keys at display precision (sorting itself is done by ProcessTable on full values).
+    let cpuSort: Double
+    let memorySort: Double
+    let threadSort: Int
+    let diskReadSort: Double
+    let diskWriteSort: Double
+    let runtimeSort: Double
+
+    init(_ p: ProcessSample, now: Date, isAI: Bool) {
+        id = p.id
+        pid = p.pid
+        name = p.name
+        iconSample = ProcessSample(pid: p.pid, name: p.name, executablePath: p.executablePath, isApp: p.isApp)
+        self.isAI = isAI
+        countersAvailable = p.countersAvailable
+        cpu = p.cpuPercent.map(Format.processCPU)
+        isHighCPU = (p.cpuPercent ?? 0) >= ProcessFilter.highCPUThreshold
+        memory = p.memoryFootprint.map { Format.bytes($0) }
+        threads = p.threadCount.map(String.init)
+        diskRead = p.diskReadBytesPerSecond.map(Format.rate)
+        diskWrite = p.diskWriteBytesPerSecond.map(Format.rate)
+        runtime = p.startTime > 0 ? Format.duration(p.runtime(now: now)) : "—"
+        architecture = p.architecture.label
+        isRosetta = p.architecture == .rosetta
+        userName = p.userName
+        cpuSort = (p.cpuSortValue * 10).rounded() / 10
+        memorySort = (p.memorySortValue / 1_048_576).rounded()
+        threadSort = p.threadSortValue
+        diskReadSort = (p.diskReadSortValue / 1_000).rounded()
+        diskWriteSort = (p.diskWriteSortValue / 1_000).rounded()
+        runtimeSort = -p.startTime.rounded()
+    }
 }

@@ -100,8 +100,8 @@ final class ProfileRunner {
             await wait(1.2)
         }
         record("10× open/close window", start: cycleStart)
-        if engine.diagnostics.activeLoops != 1 { problems.append("Expected 1 sampling loop, found \(engine.diagnostics.activeLoops)") }
-        if engine.diagnostics.loopStarts != 1 { problems.append("Sampling loop was started \(engine.diagnostics.loopStarts) times") }
+        if engine.latestDiagnostics.activeLoops != 1 { problems.append("Expected 1 sampling loop, found \(engine.latestDiagnostics.activeLoops)") }
+        if engine.latestDiagnostics.loopStarts != 1 { problems.append("Sampling loop was started \(engine.latestDiagnostics.loopStarts) times") }
 
         AppWindows.showMain()
         engine.section = .overview
@@ -124,7 +124,7 @@ final class ProfileRunner {
     }
 
     private func mark() -> Mark {
-        Mark(time: Date(), cpu: Self.ownCPUSeconds(), footprint: Self.ownFootprintMB(), diagnostics: engine.diagnostics)
+        Mark(time: Date(), cpu: Self.ownCPUSeconds(), footprint: Self.ownFootprintMB(), diagnostics: engine.latestDiagnostics)
     }
 
     private func measure(_ name: String, seconds: Double) async {
@@ -207,15 +207,15 @@ final class ProfileRunner {
     // MARK: Report
 
     private func writeReport() {
-        let snapshot = engine.system
-        let processes = engine.processes
+        let snapshot = engine.latestSystem
+        let processes = engine.latestProcesses
         let report = Report(
             machine: snapshot.cpu.topology.brand,
             macOS: ProcessInfo.processInfo.operatingSystemVersionString,
             logicalCores: snapshot.cpu.topology.logicalCores,
             memoryGB: Double(snapshot.memory.total) / 1_073_741_824,
             phases: phases,
-            collectors: engine.diagnostics.timings.map {
+            collectors: engine.latestDiagnostics.timings.map {
                 Collector(name: $0.name, runs: $0.runs, averageCPUMilliseconds: $0.averageCPUMilliseconds,
                           lastWallMilliseconds: Double($0.lastWallNanoseconds) / 1_000_000)
             },
@@ -223,7 +223,7 @@ final class ProfileRunner {
             perProcessGPUSupported: engine.perProcessGPUSupported,
             processCount: processes.count,
             restrictedProcessCount: processes.filter { !$0.countersAvailable }.count,
-            aiWorkloads: engine.ai.workloads.map { "\($0.runner.displayName): \($0.state.label)" },
+            aiWorkloads: engine.latestAI.workloads.map { "\($0.runner.displayName): \($0.state.label)" },
             problems: problems)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]

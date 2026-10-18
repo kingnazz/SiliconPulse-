@@ -113,7 +113,6 @@ struct MetricTile: View {
                 Text(value)
                     .font(.metricValue)
                     .foregroundStyle(tint)
-                    .contentTransition(.numericText())
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                 if let unit {

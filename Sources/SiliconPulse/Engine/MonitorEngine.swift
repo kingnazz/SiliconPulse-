@@ -13,6 +13,11 @@ import SiliconPulseSystem
 @Observable
 final class MonitorEngine {
     // MARK: Published state
+    //
+    // Observed values are only updated while a window or the popover is visible. SwiftUI keeps closed
+    // windows' view trees alive, so publishing while nobody looks would still cost layout work every
+    // sample. Sampling continues into `store` (history keeps recording), and everything is published
+    // the moment something becomes visible again.
 
     private(set) var system: SystemSnapshot = .empty
     private(set) var processes: [ProcessSample] = []
@@ -55,6 +60,17 @@ final class MonitorEngine {
     @ObservationIgnored private var demand = MonitoringDemand()
     @ObservationIgnored private(set) var ownPID: Int32 = getpid()
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @ObservationIgnored private var store = Store()
+
+    /// The latest data, whether or not it has been published to views.
+    private struct Store {
+        var system: SystemSnapshot = .empty
+        var processes: [ProcessSample] = []
+        var processesByPID: [Int32: ProcessSample] = [:]
+        var ai: AIMonitorResult = .empty
+        var history = MetricHistory()
+        var diagnostics = EngineDiagnostics()
+    }
 
     private enum Tier: CaseIterable { case system, processes, ai, slow }
 
@@ -74,6 +90,25 @@ final class MonitorEngine {
 
     var isDashboardVisible: Bool { !visibleDashboards.isEmpty }
 
+    /// True while anything that shows live data is on screen.
+    private var isPublishing: Bool { !visibleDashboards.isEmpty || !visiblePopovers.isEmpty }
+
+    /// Latest values regardless of visibility (used by the profiler and the menu bar title).
+    var latestDiagnostics: EngineDiagnostics { store.diagnostics }
+    var latestSystem: SystemSnapshot { store.system }
+    var latestProcesses: [ProcessSample] { store.processes }
+    var latestAI: AIMonitorResult { store.ai }
+
+    private func publishAll() {
+        system = store.system
+        history = store.history
+        processes = store.processes
+        processesByPID = store.processesByPID
+        ai = store.ai
+        diagnostics = store.diagnostics
+        updateInspectedHistory()
+    }
+
     // MARK: Lifecycle
 
     /// Starts the single sampling loop. Calling it again is a no-op.
@@ -81,7 +116,7 @@ final class MonitorEngine {
         guard loopTask == nil else { return }
         apps.start()
         isRunning = true
-        diagnostics.loopStarts += 1
+        store.diagnostics.loopStarts += 1
         loopTask = Task { [weak self] in await self?.runLoop() }
     }
 
@@ -93,8 +128,8 @@ final class MonitorEngine {
     }
 
     private func runLoop() async {
-        diagnostics.activeLoops += 1
-        defer { diagnostics.activeLoops -= 1 }
+        store.diagnostics.activeLoops += 1
+        defer { store.diagnostics.activeLoops -= 1 }
         updateDemand()
         while !Task.isCancelled {
             let now = Date()
@@ -102,8 +137,7 @@ final class MonitorEngine {
             publish(schedule)
 
             if isDue(.slow, now) {
-                let power = await sampler.samplePower()
-                system.thermal.power = power
+                store.system.thermal.power = await sampler.samplePower()
                 markDone(.slow, interval: schedule.slow)
             }
             if isDue(.system, now) {
@@ -157,13 +191,20 @@ final class MonitorEngine {
     // MARK: Demand
 
     func setDashboardVisible(_ visible: Bool, token: ObjectIdentifier) {
+        let wasPublishing = isPublishing
         let changed = visible ? visibleDashboards.insert(token).inserted : visibleDashboards.remove(token) != nil
-        if changed { updateDemand() }
+        if changed { visibilityChanged(wasPublishing: wasPublishing) }
     }
 
     func setPopoverVisible(_ visible: Bool, token: ObjectIdentifier) {
+        let wasPublishing = isPublishing
         let changed = visible ? visiblePopovers.insert(token).inserted : visiblePopovers.remove(token) != nil
-        if changed { updateDemand() }
+        if changed { visibilityChanged(wasPublishing: wasPublishing) }
+    }
+
+    private func visibilityChanged(wasPublishing: Bool) {
+        if isPublishing && !wasPublishing { publishAll() }
+        updateDemand()
     }
 
     func settingsChanged() {
@@ -197,52 +238,63 @@ final class MonitorEngine {
 
     private func publish(_ schedule: SamplingSchedule) {
         if activeSchedule != schedule { activeSchedule = schedule }
-        diagnostics.schedule = schedule
+        store.diagnostics.schedule = schedule
     }
 
     // MARK: Sampling
 
     private func sampleSystem() async {
-        let snapshot = await sampler.sampleSystem(previous: system)
+        let snapshot = await sampler.sampleSystem(previous: store.system)
         guard !Task.isCancelled else { return }
         var updated = snapshot
-        updated.thermal.power = system.thermal.power
-        system = updated
+        updated.thermal.power = store.system.thermal.power
+        store.system = updated
         if !hasSystemSample { hasSystemSample = true }
         if memoryPressure != updated.memory.pressure { memoryPressure = updated.memory.pressure }
         if machineSummary.isEmpty, updated.memory.total > 0 {
             machineSummary = updated.cpu.topology.brand + " · " + Format.bytes(updated.memory.total, decimals: 0)
         }
-        history.record(updated)
-        diagnostics.systemSamples += 1
-        diagnostics.historyPoints = history.storedPointCount
+        store.history.record(updated)
+        store.diagnostics.systemSamples += 1
+        store.diagnostics.historyPoints = store.history.storedPointCount
         updateMenuBarTitle()
+        if isPublishing {
+            system = store.system
+            history = store.history
+            diagnostics = store.diagnostics
+        }
     }
 
     private func sampleProcesses() async {
         let samples = await sampler.sampleProcesses(apps: apps.snapshot)
         guard !Task.isCancelled else { return }
-        processes = samples
+        store.processes = samples
         var map: [Int32: ProcessSample] = [:]
         map.reserveCapacity(samples.count)
         for sample in samples { map[sample.pid] = sample }
-        processesByPID = map
-        perProcessGPUSupported = await sampler.perProcessGPUSupported
-        diagnostics.processSamples += 1
+        store.processesByPID = map
+        let gpuSupported = await sampler.perProcessGPUSupported
+        if perProcessGPUSupported != gpuSupported { perProcessGPUSupported = gpuSupported }
+        store.diagnostics.processSamples += 1
         if let me = map[ownPID] {
-            diagnostics.selfCPUPercent = me.cpuPercent
-            diagnostics.selfFootprint = me.memoryFootprint
+            store.diagnostics.selfCPUPercent = me.cpuPercent
+            store.diagnostics.selfFootprint = me.memoryFootprint
         }
-        diagnostics.timings = await sampler.collectorTimings()
-        updateInspectedHistory()
+        store.diagnostics.timings = await sampler.collectorTimings()
+        if isPublishing {
+            processes = store.processes
+            processesByPID = store.processesByPID
+            diagnostics = store.diagnostics
+            updateInspectedHistory()
+        }
     }
 
     private func startAIRefresh() {
         guard aiTask == nil else {
-            diagnostics.aiRefreshesSkippedBusy += 1
+            store.diagnostics.aiRefreshesSkippedBusy += 1
             return
         }
-        let samples = processes
+        let samples = store.processes
         let probe = settings.probeDefaultPorts
         let endpoints = settings.customEndpointURLs
         aiTask = Task { [weak self, sampler, aiMonitor] in
@@ -250,13 +302,17 @@ final class MonitorEngine {
             let result = await aiMonitor.refresh(candidates: candidates, samples: samples, probeDefaultPorts: probe,
                                                  customEndpoints: endpoints)
             guard let self else { return }
-            self.ai = result
+            self.store.ai = result
             self.aiTask = nil
             let loaded = result.workloads.filter { $0.state == .modelLoaded }.count
             if self.loadedModelCount != loaded { self.loadedModelCount = loaded }
-            self.diagnostics.aiRefreshes += 1
-            self.diagnostics.lastAIRefreshDuration = result.duration
+            self.store.diagnostics.aiRefreshes += 1
+            self.store.diagnostics.lastAIRefreshDuration = result.duration
             self.updateMenuBarTitle()
+            if self.isPublishing {
+                self.ai = self.store.ai
+                self.diagnostics = self.store.diagnostics
+            }
         }
     }
 
@@ -267,7 +323,7 @@ final class MonitorEngine {
     }
 
     private func updateMenuBarTitle() {
-        let title = MenuBarFormatter.title(items: Array(settings.menuBarItems), snapshot: system, featured: ai.featured,
+        let title = MenuBarFormatter.title(items: Array(settings.menuBarItems), snapshot: store.system, featured: store.ai.featured,
                                            preferAI: settings.menuBarPrefersAI)
         if title != menuBarTitle { menuBarTitle = title }
     }
