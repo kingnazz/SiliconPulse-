@@ -23,7 +23,9 @@ It shows only what macOS (or the runner itself) actually exposes. Every value ha
 
 ## Screenshots
 
-These screenshots come from SiliconPulse's own `--screenshots` mode on a GitHub Actions macOS runner. That runner is an Apple M1 *virtual machine*, so there is no GPU utilization (the paravirtual GPU does not report it) and its CPU is busy with CI work. The local AI workloads shown are `scripts/mock-runners.py`, a test-only mock of the Ollama and llama-server APIs (the model names say "mock"), not real runners. The computer name is the runner's generated hostname.
+These screenshots come from SiliconPulse's own `--screenshots` mode on a GitHub Actions macOS runner. That runner is an Apple M1 *virtual machine*, so there is no GPU utilization (the paravirtual GPU does not report it) and its CPU is busy with CI work. The local AI workloads shown are `scripts/mock-runners.py` and `scripts/mock-omlx`, test-only mocks of the Ollama, llama-server and oMLX APIs (the model names say "mock"), not real runners. Screenshot mode shows the Mac's model name instead of its owner's name for it.
+
+CI also runs a **real** Ollama and a **real** oMLX serving a real small model (Qwen2.5 0.5B) on the same virtual Mac, and checks detection, attribution, activity, idle, unload and exit against them; their screenshots are in each run's `real-runner-*` artifacts. To check SiliconPulse on your own Apple Silicon Mac (GPU utilization against `powermetrics`, P/E cores, your runners), run `scripts/validate-on-mac.sh`; see [docs/VALIDATION.md](docs/VALIDATION.md).
 
 | Overview, dark | Overview, light |
 |---|---|
@@ -55,6 +57,7 @@ Detection is evidence-based: a process name alone only makes something a *candid
 
 | Runner | Detected from | Loaded model | Context | Model memory / GPU offload | Tokens/sec | Inference activity |
 |---|---|---|---|---|---|---|
+| **oMLX** | `omlx-server` process title, `omlx serve`, `oMLX.app` + its server; port from the server's sockets (`--port`, `OMLX_PORT`, 8000 last); confirmed by `GET /health` | ✅ `/v1/models/status` (loaded vs available) | ✅ | ✅ `actual_size` | session average from `/api/status`, labeled as such (not live) | ✅ `active_requests` |
 | **Ollama** | `ollama serve` + runner children, `OLLAMA_HOST`, `GET /api/ps` | ✅ `/api/ps` | ✅ | ✅ size / `size_vram` | ❌ not exposed by Ollama | keep-alive refresh, runner GPU time |
 | **LM Studio** | LM Studio app/helpers/`llmster`, `GET /api/v1/models` or `/api/v0/models` | ✅ | ✅ | size (v1 API) | ❌ not exposed by LM Studio | runner GPU time |
 | **llama.cpp** (`llama-server`) | process + `--port`, `GET /props`, `/slots`, `/metrics` | ✅ | ✅ | `-ngl` layers | ✅ from `/metrics` (`--metrics`) or `/slots` | ✅ slot `is_processing` |
@@ -110,7 +113,7 @@ Sources/
     Metrics/               CPU tick math, memory breakdown, counter rates, IOKit string parsing, GPU-time shares
     History/               Ring buffers and 60 s / 5 min / 30 min multi-resolution series
     Processes/             Process table query/sort/filter, process tree, KERN_PROCARGS2 parser
-    AIProviders/           Ollama, LM Studio, llama.cpp, MLX and generic providers, AIMonitor actor,
+    AIProviders/           oMLX, Ollama, LM Studio, llama.cpp, MLX and generic providers, AIMonitor actor,
                            throughput tracking, loopback-only HTTP client
   SiliconPulseSystem/      macOS collectors (Mach, sysctl, libproc, IOKit, IOPowerSources)
                            owned by the SystemSampler actor, which also times each collector
@@ -159,5 +162,6 @@ The sampling loop count stays at exactly 1 throughout, including the open/close 
 - **Temperatures and fan speeds.** These need SMC or private sensor APIs, so SiliconPulse shows the thermal pressure state instead.
 - **Energy Impact.** Activity Monitor's formula is proprietary, so it is not shown.
 - **Per-process network.** Only available through the private NetworkStatistics framework, so it is not shown. System and per-interface throughput are shown.
-- **Tokens/sec.** Only llama.cpp's `llama-server` publishes generation counters. Ollama, LM Studio and MLX do not expose live throughput to other apps, so SiliconPulse does not show it for them.
+- **Tokens/sec.** Only llama.cpp's `llama-server` publishes live generation counters. oMLX publishes an average over its session, updated when requests complete, which SiliconPulse shows as "Session average reported by oMLX" and never in the menu bar as a live rate. Ollama, LM Studio and MLX do not expose throughput to other apps, so SiliconPulse does not show it for them.
+- **oMLX with an API key.** Model and request details need the server's API key; SiliconPulse does not store keys, so it reads only `/health` (loaded count, no names) for such servers.
 - **Disk images.** Reads from a mounted disk image may count toward both the image and its host disk.
