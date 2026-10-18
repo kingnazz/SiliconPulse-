@@ -107,6 +107,7 @@ struct ProcessesView: View {
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
             .font(.system(size: 12))
+            .background(FixedRowHeight(height: 24))
             .contextMenu(forSelectionType: ProcessIdentity.self) { ids in
                 if let id = ids.first, let p = all.first(where: { $0.id == id }) {
                     Button("Copy PID") { copy(String(p.pid)) }
@@ -195,11 +196,71 @@ struct RestrictedText: View {
     }
 
     var body: some View {
+        // The explanation is attached only to restricted cells; a tooltip on every cell of a 500-row
+        // table is measurable work for nothing.
+        if available {
+            value
+        } else {
+            value.help(MetricCatalog.restricted.note ?? "")
+        }
+    }
+
+    private var value: some View {
         Text(text ?? "—")
             .font(.numeric)
             .foregroundStyle(text == nil ? .tertiary : .primary)
             .frame(maxWidth: .infinity, alignment: .trailing)
-            .help(available ? "" : MetricCatalog.restricted.note ?? "")
+    }
+}
+
+/// Gives the enclosing SwiftUI `Table` a fixed row height. Every process row is a single line, but
+/// SwiftUI tables measure each visible row's height again on every update (automatic row heights),
+/// which was about a third of the Processes screen's table-update cost.
+struct FixedRowHeight: NSViewRepresentable {
+    var height: CGFloat
+
+    func makeNSView(context: Context) -> Probe { Probe(height: height) }
+    func updateNSView(_ view: Probe, context: Context) { view.apply() }
+
+    final class Probe: NSView {
+        let height: CGFloat
+        private weak var table: NSTableView?
+
+        init(height: CGFloat) {
+            self.height = height
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            // The table is laid out in the same pass; look for it once that pass is done.
+            Task { @MainActor [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            if table == nil { table = findTable() }
+            guard let table, table.usesAutomaticRowHeights || table.rowHeight != height else { return }
+            table.usesAutomaticRowHeights = false
+            table.rowHeight = height
+        }
+
+        /// The table whose scroll view occupies the same place as this background view
+        /// (the sidebar is also a table, so the first one found is not enough).
+        private func findTable() -> NSTableView? {
+            guard let window, let root = window.contentView else { return nil }
+            let mine = convert(bounds, to: nil)
+            var stack: [NSView] = [root]
+            while let view = stack.popLast() {
+                if let table = view as? NSTableView, let scroll = table.enclosingScrollView {
+                    let frame = scroll.convert(scroll.bounds, to: nil)
+                    if frame.intersects(mine), abs(frame.midX - mine.midX) < 40 { return table }
+                }
+                stack.append(contentsOf: view.subviews)
+            }
+            return nil
+        }
     }
 }
 

@@ -395,7 +395,7 @@ struct ProcessIcon: View {
 
     var body: some View {
         Group {
-            if let image = IconCache.shared.icon(for: sample) {
+            if let image = IconCache.shared.icon(for: sample, points: size) {
                 Image(nsImage: image).resizable()
             } else {
                 Image(systemName: "gearshape").resizable().foregroundStyle(.tertiary).padding(2)

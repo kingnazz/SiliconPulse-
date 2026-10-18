@@ -74,10 +74,26 @@ struct AppMark: View {
     var size: CGFloat = 18
     @Environment(\.colorScheme) private var colorScheme
 
+    /// One image per size and appearance: the popover re-renders every second while open, and a new
+    /// NSImage each time would make SwiftUI redraw the mark every time.
+    @MainActor private static var cache: [String: NSImage] = [:]
+
     var body: some View {
-        Image(nsImage: BrandMark.image(size: size, color: NSColor(Theme.cpu)))
+        Image(nsImage: Self.image(size: size, dark: colorScheme == .dark))
             .frame(width: size, height: size)
             .accessibilityHidden(true)
-            .id(colorScheme)
+    }
+
+    @MainActor private static func image(size: CGFloat, dark: Bool) -> NSImage {
+        let key = "\(size)|\(dark)"
+        if let cached = cache[key] { return cached }
+        // Resolve the accent for this appearance now; the drawing handler may run later under another one.
+        var color = NSColor(Theme.cpu)
+        NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            color = NSColor(Theme.cpu).usingColorSpace(.sRGB) ?? color
+        }
+        let image = BrandMark.image(size: size, color: color)
+        cache[key] = image
+        return image
     }
 }

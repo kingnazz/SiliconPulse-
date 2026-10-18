@@ -34,31 +34,52 @@ final class RunningAppsRegistry {
     }
 }
 
-/// App and executable icons, cached by path. A plain singleton so views (including Table cells,
-/// where SwiftUI environment objects are not reliably available) need no environment lookups.
+/// App and executable icons, cached by path and drawn once into a small bitmap. NSWorkspace icons are
+/// multi-resolution IconServices images that would otherwise be re-rendered from their source artwork
+/// every time a row redraws. A plain singleton so views (including Table cells, where SwiftUI
+/// environment objects are not reliably available) need no environment lookups.
 @MainActor
 final class IconCache {
     static let shared = IconCache()
     private let icons = NSCache<NSString, NSImage>()
 
     private init() {
-        icons.countLimit = 300
+        icons.countLimit = 400
     }
 
-    func icon(for sample: ProcessSample) -> NSImage? {
+    /// - Parameter points: displayed size; icons are rasterized at 2× for 20 pt and below, else at 48 pt.
+    func icon(for sample: ProcessSample, points: CGFloat = 16) -> NSImage? {
         guard let path = sample.executablePath else { return nil }
-        let key = path as NSString
+        let side: CGFloat = points <= 20 ? 20 : 48
+        let key = "\(Int(side))|\(path)" as NSString
         if let cached = icons.object(forKey: key) { return cached }
-        let image: NSImage
+        let source: NSImage
         if sample.isApp, let app = NSRunningApplication(processIdentifier: sample.pid), let appIcon = app.icon {
-            image = appIcon
+            source = appIcon
         } else if let range = path.range(of: ".app/Contents/MacOS/") {
-            image = NSWorkspace.shared.icon(forFile: String(path[..<range.lowerBound]) + ".app")
+            source = NSWorkspace.shared.icon(forFile: String(path[..<range.lowerBound]) + ".app")
         } else {
-            image = NSWorkspace.shared.icon(forFile: path)
+            source = NSWorkspace.shared.icon(forFile: path)
         }
-        image.size = NSSize(width: 32, height: 32)
+        let image = Self.rasterize(source, side: side)
         icons.setObject(image, forKey: key)
+        return image
+    }
+
+    private static func rasterize(_ source: NSImage, side: CGFloat) -> NSImage {
+        let pixels = Int(side * 2)
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: rep) else { return source }
+        rep.size = NSSize(width: side, height: side)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        context.imageInterpolation = .high
+        source.draw(in: NSRect(x: 0, y: 0, width: side, height: side), from: .zero, operation: .copy, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
         return image
     }
 }

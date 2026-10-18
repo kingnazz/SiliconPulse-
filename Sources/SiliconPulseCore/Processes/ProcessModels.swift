@@ -170,25 +170,31 @@ public enum ProcessTable {
     }
 
     public static func sort(_ processes: [ProcessSample], by key: ProcessSortKey, ascending: Bool, now: Date = Date()) -> [ProcessSample] {
-        func ordered<T: Comparable>(_ a: T, _ b: T, _ pa: ProcessSample, _ pb: ProcessSample) -> Bool {
-            if a == b { return pa.pid < pb.pid }  // stable tiebreak keeps rows from jumping
-            return ascending ? a < b : a > b
+        switch key {
+        case .name: return sorted(processes, ascending) { $0.nameSortValue }
+        case .pid: return sorted(processes, ascending) { $0.pid }
+        case .cpu: return sorted(processes, ascending) { $0.cpuSortValue }
+        case .memory: return sorted(processes, ascending) { $0.memorySortValue }
+        case .threads: return sorted(processes, ascending) { $0.threadSortValue }
+        case .diskRead: return sorted(processes, ascending) { $0.diskReadSortValue }
+        case .diskWrite: return sorted(processes, ascending) { $0.diskWriteSortValue }
+        case .runtime: return sorted(processes, ascending) { $0.runtime(now: now) }
+        case .architecture: return sorted(processes, ascending) { $0.architecture.rawValue }
+        case .user: return sorted(processes, ascending) { $0.userName }
+        case .gpu: return sorted(processes, ascending) { $0.gpuSortValue }
         }
-        return processes.sorted { a, b in
-            switch key {
-            case .name: return ordered(a.nameSortValue, b.nameSortValue, a, b)
-            case .pid: return ordered(a.pid, b.pid, a, b)
-            case .cpu: return ordered(a.cpuSortValue, b.cpuSortValue, a, b)
-            case .memory: return ordered(a.memorySortValue, b.memorySortValue, a, b)
-            case .threads: return ordered(a.threadSortValue, b.threadSortValue, a, b)
-            case .diskRead: return ordered(a.diskReadSortValue, b.diskReadSortValue, a, b)
-            case .diskWrite: return ordered(a.diskWriteSortValue, b.diskWriteSortValue, a, b)
-            case .runtime: return ordered(a.runtime(now: now), b.runtime(now: now), a, b)
-            case .architecture: return ordered(a.architecture.rawValue, b.architecture.rawValue, a, b)
-            case .user: return ordered(a.userName, b.userName, a, b)
-            case .gpu: return ordered(a.gpuSortValue, b.gpuSortValue, a, b)
-            }
+    }
+
+    /// Reads each process's key once and sorts small (key, pid, index) tuples rather than comparing
+    /// whole samples; this runs for ~500 processes on every refresh while the table is visible.
+    /// Equal keys fall back to PID so rows do not jump between refreshes.
+    private static func sorted<T: Comparable>(_ processes: [ProcessSample], _ ascending: Bool, by key: (ProcessSample) -> T) -> [ProcessSample] {
+        let keyed = processes.indices.map { (key: key(processes[$0]), pid: processes[$0].pid, index: $0) }
+        let order = keyed.sorted { a, b in
+            if a.key == b.key { return a.pid < b.pid }
+            return ascending ? a.key < b.key : a.key > b.key
         }
+        return order.map { processes[$0.index] }
     }
 
     /// Top processes by a key, skipping restricted rows.
