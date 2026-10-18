@@ -58,7 +58,6 @@ struct RootView: View {
         } detail: {
             detail
                 .navigationTitle(engine.section.title)
-                .toolbar(removing: .title)
         }
     }
 

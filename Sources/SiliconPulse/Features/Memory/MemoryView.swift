@@ -123,7 +123,7 @@ private struct MemoryCompositionView: View {
             ("Free", free, Theme.track, MetricCatalog.memoryFree, false),
         ]
         VStack(alignment: .leading, spacing: 14) {
-            CompositionBar(segments: segments.dropLast().map { .init(label: $0.0, value: Double($0.1), color: $0.2) },
+            CompositionBar(segments: segments.dropLast().map { CompositionBar.Segment(label: $0.0, value: Double($0.1), color: $0.2) },
                            total: total, height: 18)
             HStack(alignment: .top, spacing: 0) {
                 ForEach(segments, id: \.0) { segment in

@@ -26,7 +26,7 @@ struct SiliconPulseApp: App {
                 .environment(settings)
         }
         .defaultSize(width: 1180, height: 800)
-        .windowToolbarStyle(.unified(showsTitle: true))
+        .windowToolbarStyle(.unified(showsTitle: false))
         .commands { SiliconPulseCommands(engine: engine) }
 
         MenuBarExtra {
