@@ -23,8 +23,12 @@ struct LineChart: View {
     var height: CGFloat = 86
     var showsScale = true
     var showsMarker = true
+    /// Hover position as a fraction of the chart's width, shared by charts that should move one cursor
+    /// together (History). Without it each chart keeps its own hover.
+    var sharedHover: Binding<Double?>?
 
-    @State private var hoverX: CGFloat?
+    @State private var localHover: Double?
+    private var hover: Double? { sharedHover.map { $0.wrappedValue } ?? localHover }
     @Environment(\.colorScheme) private var colorScheme
 
     private static let minimumSpan: TimeInterval = 20
@@ -85,7 +89,8 @@ struct LineChart: View {
                 }
             }
 
-            if let hoverX {
+            if let hover {
+                let hoverX = CGFloat(hover) * size.width
                 var rule = Path()
                 rule.move(to: CGPoint(x: hoverX, y: plotTop))
                 rule.addLine(to: CGPoint(x: hoverX, y: size.height))
@@ -108,23 +113,34 @@ struct LineChart: View {
                     .padding(.leading, 2).padding(.top, 6)
             }
         }
-        .overlay(alignment: .topTrailing) {
-            if let hoverX { hoverLabel(at: hoverX, start: start, span: span) }
-        }
-        .onContinuousHover { phase in
-            switch phase {
-            case .active(let location): hoverX = location.x
-            case .ended: hoverX = nil
+        .overlay {
+            GeometryReader { geometry in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let location): setHover(Double(min(max(0, location.x / max(1, geometry.size.width)), 1)))
+                        case .ended: setHover(nil)
+                        }
+                    }
             }
+        }
+        .overlay(alignment: .topTrailing) {
+            if let hover { hoverLabel(at: hover, start: start, span: span) }
         }
         .accessibilityElement()
         .accessibilityLabel(series.map(\.label).joined(separator: ", "))
         .accessibilityValue(series.compactMap { s in s.points.last.map { "\(s.label) \(format($0.average))" } }.joined(separator: ", "))
     }
 
-    private func hoverLabel(at x: CGFloat, start: TimeInterval, span: TimeInterval) -> some View {
+    private func setHover(_ fraction: Double?) {
+        if let sharedHover { sharedHover.wrappedValue = fraction } else { localHover = fraction }
+    }
+
+    private func hoverLabel(at fraction: Double, start: TimeInterval, span: TimeInterval) -> some View {
         GeometryReader { geometry in
-            let time = start + Double(x / max(1, geometry.size.width)) * span
+            let x = CGFloat(fraction) * geometry.size.width
+            let time = start + fraction * span
             let values = series.compactMap { s -> (String, Color)? in
                 guard let nearest = s.points.min(by: { abs($0.time - time) < abs($1.time - time) }),
                       abs(nearest.time - time) <= window.bucketWidth * 3 else { return nil }
@@ -190,6 +206,7 @@ struct ChartCard: View {
     var format: (Double) -> String
     var height: CGFloat = 86
     var emptyMessage: String?
+    var sharedHover: Binding<Double?>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -200,7 +217,8 @@ struct ChartCard: View {
                 Text(value).font(.numericMedium).foregroundStyle(.secondary)
             }
             .metricHelp(info)
-            LineChart(series: series, window: window, maxValue: maxValue, format: format, height: height, showsScale: false)
+            LineChart(series: series, window: window, maxValue: maxValue, format: format, height: height, showsScale: false,
+                      sharedHover: sharedHover)
                 .overlay {
                     if let emptyMessage, series.allSatisfy({ $0.points.isEmpty }) {
                         Text(emptyMessage).font(.meta).foregroundStyle(.tertiary)
@@ -272,6 +290,8 @@ struct CompositionBar: View {
     var segments: [Segment]
     var total: Double
     var height: CGFloat = 12
+    /// What the uncolored remainder of the bar is, for its tooltip.
+    var remainderLabel: String?
 
     var body: some View {
         GeometryReader { geometry in
@@ -288,7 +308,7 @@ struct CompositionBar: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.track)
+            .background(Theme.track.help(remainderLabel.map { "\($0): \(Format.bytes(UInt64(max(0, total - visible.reduce(0) { $0 + $1.value }))))" } ?? ""))
             .clipShape(RoundedRectangle(cornerRadius: height / 3, style: .continuous))
         }
         .frame(height: height)

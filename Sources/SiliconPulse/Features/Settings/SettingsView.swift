@@ -10,16 +10,18 @@ struct SettingsView: View {
     var body: some View {
         @Bindable var settings = settings
         Form {
-            Section("Monitoring") {
+            Section {
                 Picker("Refresh interval", selection: $settings.samplingInterval) {
                     ForEach(SamplingInterval.allCases) { interval in Text(interval.label).tag(interval) }
                 }
                 .pickerStyle(.segmented)
-                Text("Used while the window or menu bar popover is visible. When hidden, SiliconPulse slows to every 2–5 s; in Low Power Mode every interval doubles.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            } header: {
+                Text("Monitoring")
+            } footer: {
+                SettingsFootnote("Applies while the window or the menu bar popover is open. Otherwise SiliconPulse samples every 2–5 s, and in Low Power Mode every interval doubles.")
             }
 
-            Section("Menu bar") {
+            Section {
                 ForEach(MenuBarItem.allCases) { item in
                     Toggle(item.label, isOn: Binding(
                         get: { settings.menuBarItems.contains(item) },
@@ -28,18 +30,30 @@ struct SettingsView: View {
                             engine.settingsChanged()
                         }))
                 }
-                Toggle("When a model is loaded, show it instead (for example “Qwen3 · GPU 91% · 38 tok/s”)", isOn: Binding(
+                Toggle("Show the active model instead while one is loaded", isOn: Binding(
                     get: { settings.menuBarPrefersAI },
                     set: { settings.menuBarPrefersAI = $0; engine.settingsChanged() }))
                 LabeledContent("Preview") {
-                    Text(engine.menuBarTitle.isEmpty ? "Icon only" : engine.menuBarTitle).font(.system(size: 12).monospacedDigit())
+                    MenuBarPreview(title: engine.menuBarTitle)
                 }
+            } header: {
+                Text("Menu bar")
+            } footer: {
+                SettingsFootnote("With a model loaded the menu bar reads like “Qwen3 · GPU 91% · 38 tok/s”. Tokens/sec appears only while a runner reports live generation counters.")
             }
 
-            Section("AI detection") {
-                Toggle("Check default runner ports even without a matching process", isOn: $settings.probeDefaultPorts)
-                Text("Finds runners owned by another user or running in a container. Requests go only to 127.0.0.1 (ports 11434, 1234, 8080).")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            Section {
+                Toggle("Check runners' default ports", isOn: $settings.probeDefaultPorts)
+            } header: {
+                Text("AI detection")
+            } footer: {
+                SettingsFootnote("Finds runners that belong to another user or run in a container. Requests go only to 127.0.0.1: oMLX 8000, Ollama 11434, LM Studio 1234, llama.cpp 8080. Runners SiliconPulse can see as processes are found on whatever port they use.")
+            }
+
+            Section {
+                if settings.customEndpoints.isEmpty {
+                    Text("None").foregroundStyle(.secondary)
+                }
                 ForEach(settings.customEndpoints, id: \.self) { endpoint in
                     HStack {
                         Text(endpoint).font(.system(size: 12).monospaced())
@@ -50,30 +64,39 @@ struct SettingsView: View {
                             Image(systemName: "minus.circle")
                         }
                         .buttonStyle(.borderless)
+                        .help("Remove \(endpoint)")
                     }
                 }
                 HStack {
-                    TextField("Custom OpenAI-compatible endpoint, e.g. 127.0.0.1:5001", text: $newEndpoint)
+                    TextField("Endpoint", text: $newEndpoint, prompt: Text("127.0.0.1:5001"))
                         .onSubmit(addEndpoint)
                     Button("Add", action: addEndpoint).disabled(!isValidEndpoint(newEndpoint))
                 }
+            } header: {
+                Text("Custom endpoints")
+            } footer: {
+                SettingsFootnote("Any local OpenAI-compatible server SiliconPulse should ask for its models. Loopback addresses only.")
             }
 
-            Section("Privacy") {
+            Section {
                 Label("Everything stays on this Mac.", systemImage: "lock.shield")
-                Text("SiliconPulse has no analytics, telemetry, accounts, cloud backend or tracking. It never uploads data. The only network requests it makes are to AI runners on 127.0.0.1, and its HTTP client refuses any other host. History is kept in memory and is gone when you quit.")
-                    .font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Privacy")
+            } footer: {
+                SettingsFootnote("No analytics, telemetry, accounts, cloud backend or tracking, and nothing is uploaded. The only network requests go to AI runners on 127.0.0.1, and the HTTP client refuses any other host. History is kept in memory and is gone when you quit.")
             }
 
             Section("Diagnostics") {
                 DiagnosticsView()
             }
 
-            Section("About") {
+            Section {
                 LabeledContent("Version", value: Self.version)
                 LabeledContent("Interfaces", value: "Mach, sysctl, libproc, IOKit, IOPowerSources")
-                Text("SiliconPulse reports only what macOS exposes through stable interfaces. Hover the ⓘ next to any value to see how it is measured and how precise it is.")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            } header: {
+                Text("About")
+            } footer: {
+                SettingsFootnote("SiliconPulse reports only what macOS and your runners expose through stable interfaces. Hover any value to see where it comes from and how precise it is.")
             }
         }
         .formStyle(.grouped)
@@ -101,6 +124,37 @@ struct SettingsView: View {
         let short = info?["CFBundleShortVersionString"] as? String ?? "dev"
         let build = info?["CFBundleVersion"] as? String ?? "0"
         return "\(short) (\(build))"
+    }
+}
+
+/// Secondary explanatory text under a settings section.
+private struct SettingsFootnote: View {
+    var text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The current menu bar title, drawn like a menu bar item.
+private struct MenuBarPreview: View {
+    var title: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(nsImage: BrandMark.menuBarImage)
+            if !title.isEmpty {
+                Text(title).font(.system(size: 12).monospacedDigit()).lineLimit(1)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        .help(title.isEmpty ? "Icon only" : title)
     }
 }
 

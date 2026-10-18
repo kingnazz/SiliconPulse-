@@ -44,10 +44,35 @@ final class ScreenshotRunner {
             resize(width: 1180, height: 800)
             WindowCapture.renderPopover(engine: engine, appearance: appearance,
                                         to: directory.appendingPathComponent("menubar-popover-\(suffix).png"))
+            await captureStatusItemWindow(to: directory.appendingPathComponent("menubar-clicked-\(suffix).png"))
         }
         NSApp.appearance = nil
         try? await Task.sleep(nanoseconds: 300_000_000)
         NSApp.terminate(nil)
+    }
+
+    /// Clicks the real menu bar item and captures the window it opens, so the popover is checked as
+    /// people see it (status item, MenuBarExtra window, live data), not only as an offscreen render.
+    private func captureStatusItemWindow(to url: URL) async {
+        guard let button = WindowCapture.statusItemButton() else {
+            print("screenshots: no status item button found")
+            return
+        }
+        let before = Set(NSApp.windows.filter(\.isVisible).map(ObjectIdentifier.init))
+        button.performClick(nil)
+        await wait(2.0)
+        let opened = NSApp.windows.first { window in
+            window.isVisible && !before.contains(ObjectIdentifier(window)) && window !== AppWindows.mainWindow
+                && !String(describing: type(of: window)).contains("StatusBar")
+        }
+        if let opened, let view = opened.contentView {
+            WindowCapture.capture(view: view.superview ?? view, to: url)
+            print("screenshots: status item opened \(type(of: opened)) \(opened.frame.size)")
+        } else {
+            print("screenshots: clicking the status item opened no window")
+        }
+        button.performClick(nil)
+        await wait(0.8)
     }
 
     /// CI screens are small; titled windows are clamped to the screen, which would crop every capture.
@@ -90,6 +115,18 @@ enum WindowCapture {
         if let data = rep.representation(using: .png, properties: [:]) {
             try? data.write(to: url)
         }
+    }
+
+    /// The button of SiliconPulse's own status item (MenuBarExtra), found in the app's status bar window.
+    static func statusItemButton() -> NSStatusBarButton? {
+        for window in NSApp.windows where String(describing: type(of: window)).contains("StatusBar") {
+            var stack: [NSView] = window.contentView.map { [$0] } ?? []
+            while let view = stack.popLast() {
+                if let button = view as? NSStatusBarButton { return button }
+                stack.append(contentsOf: view.subviews)
+            }
+        }
+        return nil
     }
 
     /// Hosts the popover content in an offscreen window with the given appearance and captures it.

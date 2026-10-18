@@ -79,6 +79,9 @@ struct MenuBarPopover: View {
                     Text(unit).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                 }
             }
+            // "112.4 / 128G" on a large Mac still fits its column.
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             UsageBar(fraction: fraction, color: color, height: 3)
                 .padding(.trailing, 14)
         }

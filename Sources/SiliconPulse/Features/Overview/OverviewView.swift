@@ -102,7 +102,11 @@ struct PrimaryMetrics: View {
                                   : "\(Format.percent(s.memory.usedFraction)) used · \(Format.bytes(s.memory.available)) available",
                               info: MetricCatalog.memoryUsed, valueFont: .heroMetric)
                 VStack(spacing: 10) {
-                    CompositionBar(segments: MemoryComposition.segments(s.memory), total: Double(max(1, s.memory.total)), height: 8)
+                    VStack(alignment: .leading, spacing: 5) {
+                        CompositionBar(segments: MemoryComposition.segments(s.memory), total: Double(max(1, s.memory.total)), height: 8,
+                                       remainderLabel: "Cached files & free")
+                        MemoryBarLegend(m: s.memory)
+                    }
                     LineChart(series: [ChartSeries(points: history[.memoryUsed].points(for: window), color: Theme.memory, label: "Used")],
                               window: window, maxValue: Double(max(1, s.memory.total)), format: { Format.bytes($0) },
                               height: 60, showsScale: false)
@@ -150,6 +154,42 @@ enum MemoryComposition {
             .init(label: "Wired", value: Double(m.wired), color: Theme.memory.opacity(0.55)),
             .init(label: "Compressed", value: Double(m.compressed), color: m.pressure == .normal ? Theme.memory.opacity(0.3) : Theme.caution),
         ]
+    }
+}
+
+/// Says what the Overview memory bar covers: the colored part is used memory (app, wired, compressed),
+/// the grey remainder is cached files and free memory, so it never reads as a full breakdown of
+/// something it is not. Values are in the bar's tooltips and on the Memory screen.
+struct MemoryBarLegend: View {
+    var m: MemorySnapshot
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                item("App", Theme.memory, Double(m.app))
+                item("Wired", Theme.memory.opacity(0.55), Double(m.wired))
+                item("Compressed", m.pressure == .normal ? Theme.memory.opacity(0.3) : Theme.caution, Double(m.compressed))
+                Spacer(minLength: 6)
+                item("Cached & free", Theme.track, Double(m.total - min(m.total, m.used)))
+            }
+            HStack(spacing: 10) {
+                item("Used", Theme.memory, Double(m.used))
+                Spacer(minLength: 6)
+                item("Cached & free", Theme.track, Double(m.total - min(m.total, m.used)))
+            }
+        }
+        .font(.system(size: 10.5))
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    private func item(_ label: String, _ color: Color, _ bytes: Double) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 1.5).fill(color).frame(width: 7, height: 7)
+            Text(label)
+        }
+        .fixedSize()
+        .help("\(label): \(Format.bytes(UInt64(max(0, bytes))))")
     }
 }
 

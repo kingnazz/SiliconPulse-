@@ -4,12 +4,14 @@ import SwiftUI
 struct HistoryView: View {
     @Environment(MonitorEngine.self) private var engine
     @State private var window: HistoryWindow = .fiveMinutes
+    /// One cursor across all charts, so a spike can be compared across resources at the same moment.
+    @State private var hover: Double?
 
     var body: some View {
         let history = engine.history
         let total = Double(max(1, engine.system.memory.total))
         Page(spacing: 30) {
-            PageHeader("History", subtitle: "Kept in memory only. Older samples are averaged into coarser buckets, so memory use stays constant.")
+            PageHeader("History", subtitle: "Kept in memory only. Older samples are averaged into coarser buckets, so memory use stays constant. Hover a chart to compare every resource at the same moment.")
             row("CPU", info: MetricCatalog.cpuTotal, series: [ChartSeries(points: history[.cpu].points(for: window), color: Theme.cpu, label: "CPU")],
                 metric: .cpu, maxValue: 1, format: { Format.percent($0) })
             row("GPU", info: MetricCatalog.gpuDevice, series: [ChartSeries(points: history[.gpu].points(for: window), color: Theme.gpu, label: "GPU")],
@@ -42,6 +44,6 @@ struct HistoryView: View {
         let summary = [s.average(in: window).map { "Average " + format($0) }, s.maximum(in: window).map { "peak " + format($0) }]
             .compactMap { $0 }.joined(separator: " · ")
         return ChartCard(title: title, value: summary.isEmpty ? "—" : summary, info: info, series: series, window: window,
-                         maxValue: maxValue, format: format, height: height, emptyMessage: emptyMessage)
+                         maxValue: maxValue, format: format, height: height, emptyMessage: emptyMessage, sharedHover: $hover)
     }
 }
