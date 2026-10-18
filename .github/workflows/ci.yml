@@ -207,6 +207,8 @@ jobs:
           SILICONPULSE_REAL_BASE: ${{ steps.runner.outputs.base }}
           SILICONPULSE_REAL_MODEL: ${{ steps.runner.outputs.model }}
           SILICONPULSE_REAL_SERVER_PID: ${{ steps.runner.outputs.pid }}
+          SILICONPULSE_REAL_ALLOW_UNLOAD: "1"
+          SILICONPULSE_REAL_ALLOW_STOP: "1"
         run: |
           swift test --filter RealRunnerTests 2>&1 | tee real-test.log
           grep -q "Executed 1 test, with 0 failures" real-test.log

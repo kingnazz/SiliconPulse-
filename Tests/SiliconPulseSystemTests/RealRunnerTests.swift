@@ -11,7 +11,9 @@ import XCTest
 /// - `SILICONPULSE_REAL_RUNNER`: `ollama` or `omlx`
 /// - `SILICONPULSE_REAL_BASE`: e.g. `http://127.0.0.1:11434`
 /// - `SILICONPULSE_REAL_MODEL`: the model id the runner serves
-/// - `SILICONPULSE_REAL_SERVER_PID`: the server process to stop at the end
+/// - `SILICONPULSE_REAL_SERVER_PID`: the server process, checked for attribution
+/// - `SILICONPULSE_REAL_ALLOW_UNLOAD=1`: also unload the model at the end (CI; opt-in on your own Mac)
+/// - `SILICONPULSE_REAL_ALLOW_STOP=1`: also stop the server and check the workload disappears (CI; opt-in)
 ///
 /// SiliconPulse itself only reads; generation and unload requests here come from the test, standing in for a user.
 final class RealRunnerTests: XCTestCase {
@@ -20,6 +22,8 @@ final class RealRunnerTests: XCTestCase {
         var base: URL
         var model: String
         var serverPID: Int32
+        var allowUnload: Bool
+        var allowStop: Bool
     }
 
     private var config: Config? {
@@ -28,7 +32,8 @@ final class RealRunnerTests: XCTestCase {
               let base = env["SILICONPULSE_REAL_BASE"].flatMap(URL.init(string:)),
               let model = env["SILICONPULSE_REAL_MODEL"],
               let pid = env["SILICONPULSE_REAL_SERVER_PID"].flatMap(Int32.init) else { return nil }
-        return Config(runner: runner, base: base, model: model, serverPID: pid)
+        return Config(runner: runner, base: base, model: model, serverPID: pid,
+                      allowUnload: env["SILICONPULSE_REAL_ALLOW_UNLOAD"] == "1", allowStop: env["SILICONPULSE_REAL_ALLOW_STOP"] == "1")
     }
 
     private let sampler = SystemSampler()
@@ -125,6 +130,7 @@ final class RealRunnerTests: XCTestCase {
         }
 
         // 4. Model unload.
+        guard config.allowUnload else { return print("REAL-RUNNER unload and exit steps skipped (not allowed)") }
         let unloadStatus = try await unload()
         XCTAssertEqual(unloadStatus, 200, "unload request")
         let unloaded = await poll("unloaded", seconds: 30) { $0 != nil && $0?.state != .modelLoaded }
@@ -132,6 +138,7 @@ final class RealRunnerTests: XCTestCase {
         XCTAssertEqual(unloaded?.state, .idle, "no model loaded")
 
         // 5. Server exit.
+        guard config.allowStop else { return print("REAL-RUNNER exit step skipped (not allowed)") }
         kill(config.serverPID, SIGTERM)
         let gone = await poll("exited", seconds: 30) { $0 == nil }
         XCTAssertNil(gone, "the workload disappears when the server exits")

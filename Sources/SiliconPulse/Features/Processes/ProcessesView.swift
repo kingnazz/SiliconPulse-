@@ -308,7 +308,7 @@ struct ProcessRow: Identifiable, Equatable {
         runtime = p.startTime > 0 ? Format.duration(p.runtime(now: now)) : "—"
         architecture = p.architecture.label
         isRosetta = p.architecture == .rosetta
-        userName = p.userName
+        userName = ScreenshotPrivacy.userName(p.userName)
         cpuSort = (p.cpuSortValue * 10).rounded() / 10
         memorySort = (p.memorySortValue / 1_048_576).rounded()
         threadSort = p.threadSortValue
