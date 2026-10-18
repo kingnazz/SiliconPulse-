@@ -32,7 +32,7 @@ struct HistoryView: View {
             }
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $window) }
+            ToolbarItem(placement: .automatic) { WindowPicker(selection: $window) }
         }
     }
 

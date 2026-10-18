@@ -81,7 +81,7 @@ extension AIRunner {
         switch self {
         case .ollama: return "O"
         case .lmStudio: return "LM"
-        case .llamaCpp: return "ll"
+        case .llamaCpp: return "L"
         case .mlx: return "MX"
         case .pythonInference: return "Py"
         case .openAICompatible: return "AI"

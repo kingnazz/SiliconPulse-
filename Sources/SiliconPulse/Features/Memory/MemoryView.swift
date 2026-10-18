@@ -52,7 +52,7 @@ struct MemoryView: View {
             LimitationNote(text: "Model weights a runner hands to the GPU are often wired memory, so they can appear under Wired rather than in the runner's own footprint.")
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $settings.chartWindow) }
+            ToolbarItem(placement: .automatic) { WindowPicker(selection: $settings.chartWindow) }
         }
     }
 

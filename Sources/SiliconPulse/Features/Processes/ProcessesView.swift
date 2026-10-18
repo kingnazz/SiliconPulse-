@@ -69,42 +69,42 @@ struct ProcessesView: View {
                     RestrictedText(row.cpu, available: row.countersAvailable)
                         .foregroundStyle(row.isHighCPU ? Theme.caution : .primary)
                 }
-                .width(min: 52, ideal: 60, max: 80)
+                .width(min: 52, ideal: 60, max: 72)
 
                 TableColumn("Memory", value: \.memorySort) { row in
                     RestrictedText(row.memory, available: row.countersAvailable)
                 }
-                .width(min: 64, ideal: 78, max: 100)
+                .width(min: 64, ideal: 76, max: 90)
 
                 TableColumn("Threads", value: \.threadSort) { row in
                     RestrictedText(row.threads, available: row.countersAvailable)
                 }
-                .width(min: 46, ideal: 56, max: 70)
+                .width(min: 46, ideal: 56, max: 64)
 
                 TableColumn("Disk Read", value: \.diskReadSort) { row in
                     RestrictedText(row.diskRead, available: row.countersAvailable)
                 }
-                .width(min: 64, ideal: 78, max: 100)
+                .width(min: 64, ideal: 76, max: 90)
 
                 TableColumn("Disk Write", value: \.diskWriteSort) { row in
                     RestrictedText(row.diskWrite, available: row.countersAvailable)
                 }
-                .width(min: 64, ideal: 78, max: 100)
+                .width(min: 64, ideal: 76, max: 90)
 
                 TableColumn("Runtime", value: \.runtimeSort) { row in
                     Text(row.runtime).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
                 }
-                .width(min: 60, ideal: 72, max: 96)
+                .width(min: 60, ideal: 70, max: 84)
 
                 TableColumn("Arch", value: \.architecture) { row in
                     Text(row.architecture).foregroundStyle(row.isRosetta ? AnyShapeStyle(Theme.caution) : AnyShapeStyle(.tertiary))
                 }
-                .width(min: 50, ideal: 64, max: 110)
+                .width(min: 44, ideal: 56, max: 72)
 
                 TableColumn("User", value: \.userName) { row in
                     Text(row.userName).foregroundStyle(.secondary).lineLimit(1)
                 }
-                .width(min: 50, ideal: 80, max: 140)
+                .width(min: 50, ideal: 76, max: 110)
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
             .font(.system(size: 12))

@@ -44,7 +44,7 @@ struct LineChart: View {
             func y(_ value: Double) -> CGFloat { plotTop + plotHeight - CGFloat(min(max(value, 0), top) / top) * plotHeight }
             func x(_ time: TimeInterval) -> CGFloat { CGFloat((time - start) / span) * size.width }
 
-            // Baseline and one quiet midline.
+            // Baseline, a quiet top line that carries the scale label, and a fainter midline.
             var baseline = Path()
             baseline.move(to: CGPoint(x: 0, y: size.height - 0.5))
             baseline.addLine(to: CGPoint(x: size.width, y: size.height - 0.5))
@@ -52,7 +52,13 @@ struct LineChart: View {
             var mid = Path()
             mid.move(to: CGPoint(x: 0, y: y(top / 2)))
             mid.addLine(to: CGPoint(x: size.width, y: y(top / 2)))
-            context.stroke(mid, with: .color(Theme.grid), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+            context.stroke(mid, with: .color(Theme.grid.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+            if showsScale {
+                var ceiling = Path()
+                ceiling.move(to: CGPoint(x: 0, y: plotTop))
+                ceiling.addLine(to: CGPoint(x: size.width, y: plotTop))
+                context.stroke(ceiling, with: .color(Theme.grid), style: StrokeStyle(lineWidth: 1, dash: [2, 4]))
+            }
             guard top > 0 else { return }
 
             for s in series {
@@ -97,8 +103,9 @@ struct LineChart: View {
         .padding(.trailing, showsMarker ? 4 : 0)
         .overlay(alignment: .topLeading) {
             if showsScale {
+                // Inside the plot, just under the top line, so it reads as the chart's scale.
                 Text(format(top)).font(.system(size: 9.5).monospacedDigit()).foregroundStyle(.tertiary)
-                    .padding(.leading, 1).offset(y: -12)
+                    .padding(.leading, 2).padding(.top, 6)
             }
         }
         .overlay(alignment: .topTrailing) {

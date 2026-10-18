@@ -12,7 +12,7 @@ struct DiskNetworkView: View {
             NetworkSection(window: settings.chartWindow)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $settings.chartWindow) }
+            ToolbarItem(placement: .automatic) { WindowPicker(selection: $settings.chartWindow) }
         }
     }
 }

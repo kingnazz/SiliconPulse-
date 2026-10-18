@@ -22,8 +22,11 @@ final class ScreenshotRunner {
     }
 
     private func run() async {
-        // Let history, process deltas and AI detection fill in.
+        // Let history and process deltas fill in, and give AI detection time to find the runners so
+        // both appearances show the same state.
         await wait(14)
+        for _ in 0..<30 where engine.latestAI.workloads.isEmpty { await wait(1) }
+        if let window = AppWindows.mainWindow { Self.allowFramesBeyondScreen(window) }
         for (appearance, suffix) in [(NSAppearance.Name.aqua, "light"), (.darkAqua, "dark")] {
             NSApp.appearance = NSAppearance(named: appearance)
             resize(width: 1180, height: 800)
@@ -47,6 +50,15 @@ final class ScreenshotRunner {
         NSApp.terminate(nil)
     }
 
+    /// CI screens are small; titled windows are clamped to the screen, which would crop every capture.
+    /// Screenshot mode only: let this window's class keep the frame it is given.
+    private static func allowFramesBeyondScreen(_ window: NSWindow) {
+        let selector = #selector(NSWindow.constrainFrameRect(_:to:))
+        guard let method = class_getInstanceMethod(type(of: window), selector) else { return }
+        let keep: @convention(block) (NSWindow, NSRect, NSScreen?) -> NSRect = { _, rect, _ in rect }
+        class_replaceMethod(type(of: window), selector, imp_implementationWithBlock(keep), method_getTypeEncoding(method))
+    }
+
     private func resize(width: CGFloat, height: CGFloat) {
         guard let window = AppWindows.mainWindow else { return }
         // Set the frame directly so the window may extend below a small CI screen instead of being clamped.
@@ -54,6 +66,7 @@ final class ScreenshotRunner {
         let top = window.screen?.visibleFrame.maxY ?? window.frame.maxY
         let frame = NSRect(x: window.frame.minX, y: top - height - chrome, width: width, height: height + chrome)
         window.setFrame(frame, display: true)
+        print("screenshots: requested \(Int(width))x\(Int(height)), content \(window.contentLayoutRect.size), screen \(window.screen?.frame.size ?? .zero)")
     }
 
     private func wait(_ seconds: Double) async {

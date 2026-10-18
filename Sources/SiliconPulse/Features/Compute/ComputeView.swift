@@ -15,7 +15,7 @@ struct ComputeView: View {
             ComputeFootnotes()
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $settings.chartWindow) }
+            ToolbarItem(placement: .automatic) { WindowPicker(selection: $settings.chartWindow) }
         }
     }
 
@@ -98,9 +98,9 @@ private struct CoreBar: View {
             RoundedRectangle(cornerRadius: 2.5, style: .continuous).fill(Theme.track)
             RoundedRectangle(cornerRadius: 2.5, style: .continuous)
                 .fill(Theme.load(fraction, base: core.kind == .efficiency ? Theme.cpu.opacity(0.6) : Theme.cpu))
-                .frame(height: max(2, 34 * CGFloat(fraction)))
+                .frame(height: max(2, 44 * CGFloat(fraction)))
         }
-        .frame(width: 12, height: 34)
+        .frame(width: 14, height: 44)
         .help("CPU \(core.id)\(core.kind == .unknown ? "" : " (\(core.kind.rawValue))"): \(Format.percent(fraction))")
     }
 }

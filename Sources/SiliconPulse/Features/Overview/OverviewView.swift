@@ -18,7 +18,7 @@ struct OverviewView: View {
             SecondaryRow(window: settings.chartWindow)
         }
         .toolbar {
-            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $settings.chartWindow) }
+            ToolbarItem(placement: .automatic) { WindowPicker(selection: $settings.chartWindow) }
         }
     }
 }
@@ -90,7 +90,7 @@ struct PrimaryMetrics: View {
                     LineChart(series: [ChartSeries(points: history[.gpu].points(for: window), color: Theme.gpu, label: "GPU")],
                               window: window, maxValue: 1, format: { Format.percent($0) }, height: 78, showsScale: false)
                 } else {
-                    UnavailablePlot(text: "This Mac's GPU driver does not report utilization", height: 78)
+                    UnavailablePlot(height: 78)
                 }
             }
             divider
@@ -125,23 +125,21 @@ struct PrimaryMetrics: View {
     }
 
     private func gpuCaption(_ gpu: GPUSnapshot) -> String {
-        guard gpu.isAvailable else { return "Not reported" }
+        guard gpu.isAvailable else { return "Not reported by this Mac's GPU driver" }
         if let memory = gpu.memoryInUse { return "Whole Mac · \(Format.bytes(memory)) in use" }
         return "Whole Mac"
     }
 }
 
 /// Placeholder plot area with a short reason, same height as a chart so columns stay aligned.
+/// An empty plot for a metric this Mac does not report: just the baseline, so the row stays aligned.
 struct UnavailablePlot: View {
-    var text: String
     var height: CGFloat
 
     var body: some View {
-        ZStack {
-            Rectangle().fill(Theme.grid).frame(height: 1).frame(maxHeight: .infinity, alignment: .bottom)
-            Text(text).font(.meta).foregroundStyle(.tertiary).multilineTextAlignment(.center)
-        }
-        .frame(height: height)
+        Rectangle().fill(Theme.grid).frame(height: 1)
+            .frame(height: height, alignment: .bottom)
+            .accessibilityHidden(true)
     }
 }
 

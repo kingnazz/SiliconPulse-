@@ -57,7 +57,7 @@ struct MenuBarPopover: View {
             .padding(.horizontal, -6)
         }
         .padding(16)
-        .frame(width: 300)
+        .frame(width: 312)
         .background {
             // ImageRenderer cannot draw AppKit views, so offscreen renders skip the tracker.
             if !alwaysLive {
@@ -113,23 +113,25 @@ private struct PopoverAISection: View {
                 ActivityLabel(activity: workload.activity, lastActivity: workload.lastActivity, state: workload.state)
             }
             HStack(spacing: 10) {
-                RunnerGlyph(runner: workload.runner, size: 28)
-                VStack(alignment: .leading, spacing: 1) {
+                RunnerGlyph(runner: workload.runner, size: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    // The model name gets the full row; numbers sit on the line below so it never truncates early.
                     Text(workload.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-                    Text(workload.runner.displayName).font(.meta).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 1) {
-                    if let tps = workload.tokensPerSecond.value {
-                        Text(Format.tokensPerSecond(tps))
-                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(workload.activity.isBusy ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(.secondary))
-                            .help(workload.tokensPerSecond.note ?? "")
+                    HStack(spacing: 6) {
+                        Text(workload.runner.displayName).foregroundStyle(.secondary)
+                        Spacer(minLength: 4)
+                        if let tps = workload.tokensPerSecond.value {
+                            Text(Format.tokensPerSecond(tps))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(workload.activity.isBusy ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(.secondary))
+                                .help(workload.tokensPerSecond.note ?? "")
+                        }
+                        if let memory = workload.primaryModel?.sizeBytes ?? live.memory {
+                            Text(Format.bytes(memory)).foregroundStyle(.secondary)
+                                .help(workload.primaryModel?.sizeBytes != nil ? "Model memory reported by the runner" : "Runner process memory")
+                        }
                     }
-                    if let memory = workload.primaryModel?.sizeBytes ?? live.memory {
-                        Text(Format.bytes(memory)).font(.meta.monospacedDigit()).foregroundStyle(.secondary)
-                            .help(workload.primaryModel?.sizeBytes != nil ? "Model memory reported by the runner" : "Runner process memory")
-                    }
+                    .font(.meta.monospacedDigit())
                 }
             }
             .padding(10)
