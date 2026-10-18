@@ -37,6 +37,12 @@ CI also runs a **real** Ollama and a **real** oMLX serving a real small model (Q
 | **Processes** | **Disk & Network** |
 | ![Processes](docs/screenshots/processes-light.png) | ![Disk & Network](docs/screenshots/diskNetwork-dark.png) |
 
+With a **real oMLX server** serving `Qwen2.5-0.5B-Instruct-4bit` (CI `real-runner` job, same virtual Mac):
+
+| Overview | Menu bar item, clicked |
+|---|---|
+| ![Overview with a real oMLX model](docs/screenshots/real-runner/omlx-overview-dark.png) | ![Menu bar popover with a real oMLX model](docs/screenshots/real-runner/omlx-menubar-clicked-dark.png) |
+
 Every screen is captured in both appearances, plus Overview at the minimum (920 pt) and a large (1600 pt) window size: see [`docs/screenshots/`](docs/screenshots). Regenerate them with `build/SiliconPulse.app/Contents/MacOS/SiliconPulse --screenshots <dir>`.
 
 ## Features
@@ -140,15 +146,17 @@ See [docs/METRICS.md](docs/METRICS.md) for every metric's collection method, acc
 
 ## Measured performance
 
-Every CI run builds the release app and drives it through a scripted session (`--profile`): dashboard visible, every screen, the window closed, ten rapid open/close cycles, then an 8-minute soak. SiliconPulse's own CPU time and footprint come from the kernel's accounting for the process (`getrusage`, `task_info` `phys_footprint`), cross-checked with `ps`. Ranges below span the last three CI runs (`profile` artifact):
+Every CI run builds the release app and drives it through a scripted session (`--profile`): dashboard visible, every screen, the window closed, ten rapid open/close cycles, then an 8-minute soak. SiliconPulse's own CPU time and footprint come from the kernel's accounting for the process (`getrusage`, `task_info` `phys_footprint`), cross-checked with `ps`. Ranges below span the last two CI runs (`profile` artifact):
 
 | State | Average CPU (% of one core) | Footprint |
 |---|---|---|
-| Window closed, menu bar only (soak, 4 × 1 min) | 0.21–0.69% | 67.0–71.1 MB, flat |
-| Overview visible, 1 s sampling (soak, 4 × 1 min) | 2.9–4.8% | 67.2–71.1 MB, flat |
-| AI Models visible | 1.6–2.5% | ≈ 62 MB |
-| Processes visible (≈ 500-row table) | 10.8–15.4% (15.4% was a single outlier) | ≈ 71–75 MB |
-| 10 × open/close of the main window | 20–22% during the cycling | +2–5 MB, then stable |
+| Window closed, menu bar only (soak, 4 × 1 min) | 0.45–0.86% | 70.0–74.9 MB, flat |
+| Overview visible, 1 s sampling (soak, 4 × 1 min) | 3.2–5.3% | 70.1–74.9 MB, flat |
+| AI Models visible (three runtimes) | 2.4–5.1% | ≈ 68 MB |
+| Processes visible (≈ 500-row table) | 7.2–11.0% | ≈ 72–78 MB |
+| 10 × open/close of the main window | 16–20% during the cycling | +5–7 MB, then stable |
+
+These runs watch three mock runtimes (oMLX, Ollama, llama-server) instead of two, and the same unchanged collectors measured up to 35% slower in one run than the other, so the virtual Mac's speed alone moves these figures by about that much.
 
 The sampling loop count stays at exactly 1 throughout, including the open/close cycles. Collector costs, in thread CPU per run: CPU 0.1 ms, memory 0.05 ms, GPU 0.3 ms, disk 0.3 ms, network 0.15 ms, process table (≈ 500 processes) 2.4–3.2 ms, per-process GPU accounting 1.3–1.8 ms, AI candidate inspection 0.3 ms (plus localhost API calls, run off the main thread every 5–10 s).
 
