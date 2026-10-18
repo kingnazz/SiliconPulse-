@@ -69,3 +69,37 @@ jobs:
             profile/
             build.log
             test.log
+
+  screenshots:
+    name: Screenshots (light & dark)
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bundle app
+        run: scripts/build-app.sh
+      - name: Start mock AI runners (test only)
+        run: |
+          python3 scripts/mock-runners.py > mock-runners.log 2>&1 &
+          sleep 2
+      - name: Capture screens
+        run: |
+          defaults write app.siliconpulse.SiliconPulse hasCompletedOnboarding -bool true
+          system_profiler SPDisplaysDataType | grep -i resolution || true
+          build/SiliconPulse.app/Contents/MacOS/SiliconPulse --screenshots "$PWD/shots" > shots.log 2>&1 &
+          PID=$!
+          for _ in $(seq 1 240); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          kill $PID 2>/dev/null || true
+          ls -la shots
+          test "$(ls shots/*.png | wc -l)" -ge 20
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: |
+            shots/
+            shots.log

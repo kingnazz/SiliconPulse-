@@ -87,6 +87,7 @@ struct SiliconPulseCommands: Commands {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var engine: MonitorEngine?
     private var profiler: ProfileRunner?
+    private var screenshotter: ScreenshotRunner?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -94,6 +95,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let directory = options.profileDirectory, let engine = AppDelegate.engine {
             profiler = ProfileRunner(engine: engine, directory: directory)
             profiler?.start()
+        } else if let directory = options.screenshotDirectory, let engine = AppDelegate.engine {
+            screenshotter = ScreenshotRunner(engine: engine, directory: directory)
+            screenshotter?.start()
         }
     }
 
@@ -139,6 +143,7 @@ enum AppWindows {
 struct LaunchOptions {
     var skipOnboarding = false
     var profileDirectory: URL?
+    var screenshotDirectory: URL?
 
     static let current: LaunchOptions = {
         var options = LaunchOptions()
@@ -146,6 +151,10 @@ struct LaunchOptions {
         options.skipOnboarding = args.contains("--skip-onboarding")
         if let index = args.firstIndex(of: "--profile"), index + 1 < args.count {
             options.profileDirectory = URL(fileURLWithPath: args[index + 1], isDirectory: true)
+            options.skipOnboarding = true
+        }
+        if let index = args.firstIndex(of: "--screenshots"), index + 1 < args.count {
+            options.screenshotDirectory = URL(fileURLWithPath: args[index + 1], isDirectory: true)
             options.skipOnboarding = true
         }
         return options
