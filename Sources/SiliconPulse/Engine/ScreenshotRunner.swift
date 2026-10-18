@@ -49,7 +49,11 @@ final class ScreenshotRunner {
 
     private func resize(width: CGFloat, height: CGFloat) {
         guard let window = AppWindows.mainWindow else { return }
-        window.setContentSize(NSSize(width: width, height: height))
+        // Set the frame directly so the window may extend below a small CI screen instead of being clamped.
+        let chrome = window.frame.height - window.contentRect(forFrameRect: window.frame).height
+        let top = window.screen?.visibleFrame.maxY ?? window.frame.maxY
+        let frame = NSRect(x: window.frame.minX, y: top - height - chrome, width: width, height: height + chrome)
+        window.setFrame(frame, display: true)
     }
 
     private func wait(_ seconds: Double) async {

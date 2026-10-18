@@ -57,10 +57,10 @@ struct MenuBarLabel: View {
 
     var body: some View {
         if engine.menuBarTitle.isEmpty {
-            Image(systemName: "waveform.path.ecg")
+            Image(nsImage: BrandMark.menuBarImage)
         } else {
             HStack(spacing: 4) {
-                Image(systemName: "waveform.path.ecg")
+                Image(nsImage: BrandMark.menuBarImage)
                 Text(engine.menuBarTitle).monospacedDigit()
             }
         }

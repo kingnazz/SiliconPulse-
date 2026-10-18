@@ -9,129 +9,136 @@ struct MemoryView: View {
         @Bindable var settings = settings
         let m = engine.system.memory
         let window = settings.chartWindow
-        Page {
-            Panel {
+        Page(spacing: 28) {
+            PageHeader("Memory", subtitle: "Unified memory shared by the CPU, GPU and Neural Engine")
+            MemorySummary(m: m)
+            MemoryCompositionView(m: m)
+
+            VStack(alignment: .leading, spacing: 14) {
+                SectionHeader("History")
                 HStack(alignment: .top, spacing: 28) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        SectionLabel(text: "Memory used")
-                        HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(Format.fixed(Double(m.used) / 1_073_741_824, 1)).font(.metricValueLarge)
-                            Text("/ \(Format.fixed(Double(m.total) / 1_073_741_824, 0)) GB").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
-                        }
-                        Text("\(Format.percent(m.usedFraction)) of unified memory").font(.system(size: 11.5)).foregroundStyle(.secondary)
-                    }
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack(spacing: 4) {
-                            SectionLabel(text: "Pressure")
-                            QualityBadge(info: MetricCatalog.memoryPressure)
-                        }
-                        StatusPill(text: m.pressure.label, color: Theme.color(for: m.pressure))
-                        if let level = m.kernelFreeLevel {
-                            Text("Kernel free level \(level)%").font(.system(size: 11)).foregroundStyle(.secondary)
-                                .help(MetricCatalog.memoryFreeLevel.tooltip)
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            SectionLabel(text: "Headroom")
-                            QualityBadge(info: MetricCatalog.memoryHeadroom)
-                        }
-                        Text("≈ " + Format.bytes(m.estimatedHeadroom)).font(.metricValue)
-                        Text(headroomAdvice(m)).font(.system(size: 11.5)).foregroundStyle(.secondary).frame(maxWidth: 300, alignment: .leading)
-                    }
-                    Spacer()
-                }
-                CompositionBar(segments: segments(m), total: Double(m.total))
-                    .padding(.top, 6)
-                HStack(spacing: 16) {
-                    ForEach(segments(m)) { segment in
-                        HStack(spacing: 5) {
-                            RoundedRectangle(cornerRadius: 2).fill(segment.color).frame(width: 8, height: 8)
-                            Text(segment.label).foregroundStyle(.secondary)
-                            Text(Format.bytes(UInt64(max(0, segment.value)))).font(.numericMedium)
-                        }
-                    }
-                }
-                .font(.system(size: 11.5))
-            }
-
-            HStack(alignment: .top, spacing: 12) {
-                Panel("Breakdown") {
-                    VStack(spacing: 0) {
-                        StatRow(label: "Installed", value: Format.bytes(m.total), info: MetricCatalog.memoryInstalled)
-                        StatRow(label: "Used", value: Format.bytes(m.used), info: MetricCatalog.memoryUsed)
-                        StatRow(label: "Available", value: Format.bytes(m.available), info: MetricCatalog.memoryAvailable)
-                        Divider().padding(.vertical, 4)
-                        StatRow(label: "App memory", value: Format.bytes(m.app), info: MetricCatalog.memoryApp, swatch: Theme.memory)
-                        StatRow(label: "Wired", value: Format.bytes(m.wired), info: MetricCatalog.memoryWired, swatch: Theme.gpu.opacity(0.8))
-                        StatRow(label: "Compressed", value: Format.bytes(m.compressed), info: MetricCatalog.memoryCompressed, swatch: Theme.caution)
-                        StatRow(label: "Cached files", value: Format.bytes(m.cachedFiles), info: MetricCatalog.memoryCached, swatch: Color.secondary.opacity(0.45))
-                        StatRow(label: "Free", value: Format.bytes(m.free), info: MetricCatalog.memoryFree)
-                    }
-                }
-                Panel("Swap & compression") {
-                    VStack(spacing: 0) {
-                        StatRow(label: "Swap used", value: "\(Format.bytes(m.swapUsed)) of \(Format.bytes(m.swapTotal))", info: MetricCatalog.swapUsed,
-                                valueColor: m.swapUsed > 0 ? Theme.caution : .primary)
-                        StatRow(label: "Swap-outs", value: pagesPerSecond(m.swapOutsPerSecond), info: MetricCatalog.swapActivity,
-                                valueColor: m.isSwappingOut ? Theme.critical : .primary)
-                        StatRow(label: "Swap-ins", value: pagesPerSecond(m.swapInsPerSecond), info: MetricCatalog.swapActivity)
-                        StatRow(label: "Compressions", value: pagesPerSecond(m.compressionsPerSecond), info: MetricCatalog.compressionActivity)
-                        StatRow(label: "Decompressions", value: pagesPerSecond(m.decompressionsPerSecond), info: MetricCatalog.compressionActivity)
-                    }
-                    Text(swapSummary(m)).font(.system(size: 11.5)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    ChartCard(title: "Used and compressed", value: Format.bytes(m.used), info: MetricCatalog.memoryUsed,
+                              series: [ChartSeries(points: engine.history[.memoryUsed].points(for: window), color: Theme.memory, label: "Used"),
+                                       ChartSeries(points: engine.history[.memoryCompressed].points(for: window), color: Theme.caution, label: "Compressed", dashed: true)],
+                              window: window, maxValue: Double(max(1, m.total)), format: { Format.bytes($0) }, height: 110)
+                        .frame(maxWidth: .infinity)
+                    ChartCard(title: "Swap used", value: Format.bytes(m.swapUsed), info: MetricCatalog.swapUsed,
+                              series: [ChartSeries(points: engine.history[.swapUsed].points(for: window),
+                                                   color: m.swapUsed > 0 ? Theme.critical : Color.secondary, label: "Swap")],
+                              window: window, maxValue: nil, format: { Format.bytes($0) }, height: 110)
+                        .frame(maxWidth: 320)
                 }
             }
 
-            HStack {
-                SectionLabel(text: "History")
-                Spacer()
-                WindowPicker(selection: $settings.chartWindow)
+            HStack(alignment: .top, spacing: 28) {
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader("Activity")
+                    StatRow(label: "Swap-outs", value: pagesPerSecond(m.swapOutsPerSecond), info: MetricCatalog.swapActivity,
+                            valueColor: m.isSwappingOut ? Theme.critical : .primary)
+                    StatRow(label: "Swap-ins", value: pagesPerSecond(m.swapInsPerSecond), info: MetricCatalog.swapActivity)
+                    StatRow(label: "Compressions", value: pagesPerSecond(m.compressionsPerSecond), info: MetricCatalog.compressionActivity)
+                    StatRow(label: "Decompressions", value: pagesPerSecond(m.decompressionsPerSecond), info: MetricCatalog.compressionActivity)
+                    if let level = m.kernelFreeLevel {
+                        StatRow(label: "Kernel free level", value: "\(level)%", info: MetricCatalog.memoryFreeLevel)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 8) {
+                    SectionHeader("Largest memory users")
+                    ProcessMiniList(processes: ProcessTable.top(engine.processes, by: .memory, limit: 6), metric: .memory)
+                }
+                .frame(maxWidth: .infinity)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 12)], spacing: 12) {
-                ChartCard(title: "Used & compressed", value: Format.bytes(m.used), info: MetricCatalog.memoryUsed,
-                          series: [ChartSeries(points: engine.history[.memoryUsed].points(for: window), color: Theme.memory, label: "Used"),
-                                   ChartSeries(points: engine.history[.memoryCompressed].points(for: window), color: Theme.caution, label: "Compressed", dashed: true)],
-                          window: window, maxValue: Double(max(1, m.total)), format: { Format.bytes($0) })
-                ChartCard(title: "Swap used", value: Format.bytes(m.swapUsed), info: MetricCatalog.swapUsed,
-                          series: [ChartSeries(points: engine.history[.swapUsed].points(for: window), color: Theme.critical.opacity(0.8), label: "Swap")],
-                          window: window, maxValue: nil, format: { Format.bytes($0) })
-            }
-
-            Panel("Largest memory users") {
-                ProcessMiniList(processes: ProcessTable.top(engine.processes, by: .memory, limit: 8), metric: .memory)
-                LimitationNote(text: "Model weights a runner hands to the GPU are often wired memory, so they can appear under Wired rather than in the runner's own footprint.")
-            }
+            LimitationNote(text: "Model weights a runner hands to the GPU are often wired memory, so they can appear under Wired rather than in the runner's own footprint.")
         }
-    }
-
-    private func segments(_ m: MemorySnapshot) -> [CompositionBar.Segment] {
-        [
-            .init(label: "App", value: Double(m.app), color: Theme.memory),
-            .init(label: "Wired", value: Double(m.wired), color: Theme.gpu.opacity(0.8)),
-            .init(label: "Compressed", value: Double(m.compressed), color: Theme.caution),
-            .init(label: "Cached", value: Double(m.cachedFiles), color: Color.secondary.opacity(0.45)),
-        ]
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) { WindowPicker(selection: $settings.chartWindow) }
+        }
     }
 
     private func pagesPerSecond(_ value: Double?) -> String {
         guard let value else { return "—" }
         return value == 0 ? "0 /s" : Format.fixed(value, value < 10 ? 1 : 0) + " pages/s"
     }
+}
 
-    private func headroomAdvice(_ m: MemorySnapshot) -> String {
-        switch m.pressure {
-        case .critical: return "macOS is under critical pressure. Loading another model will swap."
-        case .warning: return "macOS is compressing memory. A larger model will likely swap."
-        default:
-            if m.total == 0 { return "" }
-            return "A model up to about this size should load without heavy compression."
+/// Used / total as the dominant number, with pressure, swap and headroom beside it.
+private struct MemorySummary: View {
+    var m: MemorySnapshot
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Used").font(.metaMedium).foregroundStyle(.secondary)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(Format.fixed(Double(m.used) / 1_073_741_824, 1)).font(.system(size: 44, weight: .semibold).monospacedDigit())
+                    Text("/ \(Format.fixed(Double(m.total) / 1_073_741_824, 0)) GB").font(.system(size: 18, weight: .medium)).foregroundStyle(.secondary)
+                }
+                Text("\(Format.percent(m.usedFraction)) of unified memory · \(Format.bytes(m.available)) available")
+                    .font(.body13).foregroundStyle(.secondary)
+            }
+            .metricHelp(MetricCatalog.memoryUsed)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(alignment: .top, spacing: 32) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Pressure").font(.metaMedium).foregroundStyle(.secondary)
+                    StatusPill(text: m.pressure.label, color: Theme.color(for: m.pressure), prominent: m.pressure != .normal)
+                        .font(.metricSmall)
+                }
+                .metricHelp(MetricCatalog.memoryPressure)
+                MetricReadout(label: "Swap", value: Format.bytes(m.swapUsed),
+                              caption: m.isSwappingOut ? "Swapping now" : (m.swapUsed > 0 ? "Not swapping now" : "None in use"),
+                              info: MetricCatalog.swapUsed, valueFont: .metric, tint: m.swapUsed > 0 ? Theme.caution : .primary)
+                    .fixedSize()
+                MetricReadout(label: "Headroom", value: "≈ " + Format.bytes(m.estimatedHeadroom), caption: headroomCaption,
+                              info: MetricCatalog.memoryHeadroom, valueFont: .metric)
+                    .fixedSize()
+            }
         }
     }
 
-    private func swapSummary(_ m: MemorySnapshot) -> String {
-        if m.isSwappingOut { return "macOS is writing memory to disk right now. Expect slowdowns, especially for large models." }
-        if m.swapUsed > 0 { return "Some memory was swapped earlier, but nothing is being swapped out right now." }
-        return "No swap in use."
+    private var headroomCaption: String {
+        switch m.pressure {
+        case .critical: return "Another model will swap"
+        case .warning: return "A larger model will likely swap"
+        default: return "Room for a model this size"
+        }
+    }
+}
+
+/// The composition bar with a column legend underneath: each segment's name, size and share.
+private struct MemoryCompositionView: View {
+    var m: MemorySnapshot
+
+    var body: some View {
+        let total = Double(max(1, m.total))
+        let accounted = m.app + m.wired + m.compressed + m.cachedFiles
+        let free = m.total > accounted ? m.total - accounted : 0
+        let segments: [(String, UInt64, Color, MetricInfo, Bool)] = [
+            ("App memory", m.app, Theme.memory, MetricCatalog.memoryApp, false),
+            ("Wired", m.wired, Theme.memory.opacity(0.55), MetricCatalog.memoryWired, false),
+            ("Compressed", m.compressed, m.pressure == .normal ? Theme.memory.opacity(0.3) : Theme.caution, MetricCatalog.memoryCompressed, m.pressure != .normal),
+            ("Cached files", m.cachedFiles, Color.secondary.opacity(0.35), MetricCatalog.memoryCached, false),
+            ("Free", free, Theme.track, MetricCatalog.memoryFree, false),
+        ]
+        VStack(alignment: .leading, spacing: 14) {
+            CompositionBar(segments: segments.dropLast().map { .init(label: $0.0, value: Double($0.1), color: $0.2) },
+                           total: total, height: 18)
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(segments, id: \.0) { segment in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            RoundedRectangle(cornerRadius: 2.5).fill(segment.2).frame(width: 10, height: 10)
+                            Text(segment.0).font(.metaMedium).foregroundStyle(segment.4 ? Theme.caution : .secondary)
+                        }
+                        Text(Format.bytes(segment.1)).font(.metricSmall)
+                        Text(Format.percent(Double(segment.1) / total)).font(.meta).foregroundStyle(.tertiary)
+                    }
+                    .metricHelp(segment.3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
     }
 }

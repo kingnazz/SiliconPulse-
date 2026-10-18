@@ -7,9 +7,7 @@ struct OnboardingView: View {
     var body: some View {
         VStack(spacing: 18) {
             Spacer()
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(Theme.cpu)
+            AppMark(size: 56)
             VStack(spacing: 8) {
                 Text("SiliconPulse")
                     .font(.system(size: 30, weight: .semibold))

@@ -52,14 +52,13 @@ struct RootView: View {
                 }
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 206, max: 240)
+            .safeAreaInset(edge: .top) { SidebarHeader() }
             .safeAreaInset(edge: .bottom) { SidebarFooter() }
         } detail: {
             detail
                 .navigationTitle(engine.section.title)
-                .toolbar {
-                    ToolbarItem(placement: .automatic) { SamplingStatus() }
-                }
+                .toolbar(removing: .title)
         }
     }
 
@@ -99,9 +98,9 @@ private struct SidebarRow: View {
     @ViewBuilder private var badge: some View {
         switch section {
         case .ai:
-            let loaded = engine.loadedModelCount
-            if loaded > 0 {
-                Text("\(loaded)").font(.system(size: 10, weight: .semibold).monospacedDigit()).foregroundStyle(.secondary)
+            if engine.loadedModelCount > 0 {
+                PulseDot(color: Theme.ai, isLive: engine.aiGenerating, size: 6)
+                    .help(engine.aiGenerating ? "A local model is generating" : "A local model is loaded")
             }
         case .memory:
             let pressure = engine.memoryPressure
@@ -114,44 +113,43 @@ private struct SidebarRow: View {
     }
 }
 
+/// Product identity at the top of the sidebar.
+private struct SidebarHeader: View {
+    var body: some View {
+        HStack(spacing: 7) {
+            AppMark(size: 18)
+            Text("SiliconPulse").font(.system(size: 13, weight: .semibold))
+            Spacer()
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 4)
+        .padding(.bottom, 6)
+    }
+}
+
+/// Live sampling state and the privacy promise, quietly, at the bottom of the sidebar.
 private struct SidebarFooter: View {
     @Environment(MonitorEngine.self) private var engine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Divider()
-            HStack(spacing: 6) {
-                Image(systemName: "lock.shield").foregroundStyle(.tertiary)
-                Text("Local only · no telemetry").foregroundStyle(.secondary)
-            }
-            .font(.system(size: 10.5))
-            if !engine.machineSummary.isEmpty {
-                Text(engine.machineSummary)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.bottom, 10)
-    }
-}
-
-/// Toolbar indicator showing the live sampling cadence.
-private struct SamplingStatus: View {
-    @Environment(MonitorEngine.self) private var engine
-
-    var body: some View {
         let schedule = engine.activeSchedule
-        HStack(spacing: 6) {
-            Circle()
-                .fill(engine.isRunning ? Theme.good : Theme.muted)
-                .frame(width: 6, height: 6)
-            Text(engine.isRunning ? "Sampling every \(Format.fixed(schedule.system, schedule.system < 1 ? 1 : 0)) s" : "Paused")
-                .font(.system(size: 11).monospacedDigit())
-                .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Circle().fill(engine.isRunning ? Theme.good : Theme.muted).frame(width: 6, height: 6)
+                Text(engine.isRunning ? "Live · every \(Format.fixed(schedule.system, schedule.system < 1 ? 1 : 0)) s" : "Paused")
+                    .monospacedDigit()
+            }
+            .help("System metrics every \(schedule.system) s, processes every \(schedule.processes) s, AI detection every \(schedule.aiDiscovery) s. SiliconPulse slows down when its window is hidden.")
+            HStack(spacing: 6) {
+                Image(systemName: "lock.shield")
+                Text("Local only · no telemetry")
+            }
+            .foregroundStyle(.tertiary)
         }
-        .padding(.horizontal, 6)
-        .help("System metrics every \(schedule.system) s, processes every \(schedule.processes) s, AI detection every \(schedule.aiDiscovery) s. Slower when the window is hidden.")
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 18)
+        .padding(.bottom, 12)
     }
 }

@@ -1,7 +1,7 @@
 import SiliconPulseCore
 import SwiftUI
 
-/// Compact popover shown from the menu bar item.
+/// Compact popover shown from the menu bar item: state, three numbers, the active model, actions.
 struct MenuBarPopover: View {
     /// Render live values even without a visible window (used for offscreen rendering).
     var alwaysLive = false
@@ -15,52 +15,49 @@ struct MenuBarPopover: View {
         // SwiftUI keeps this view alive while the popover is closed. Reading the per-second system
         // snapshot only while it is open keeps the closed popover from re-rendering every sample.
         let s = (isVisible || alwaysLive) ? engine.system : SystemSnapshot.empty
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        let health = MachineHealth.evaluate(s)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                AppMark(size: 16)
                 Text("SiliconPulse").font(.system(size: 13, weight: .semibold))
                 Spacer()
-                if s.memory.pressure != .normal && s.memory.pressure != .unknown {
-                    StatusPill(text: s.memory.pressure.label, color: Theme.color(for: s.memory.pressure))
+                if settings.hasCompletedOnboarding {
+                    StatusPill(text: health.title, color: health.color, prominent: health.level != .healthy)
                 }
             }
+            .padding(.bottom, 14)
 
             if settings.hasCompletedOnboarding {
-                VStack(spacing: 7) {
-                    popoverRow("CPU", Format.percent(s.cpu.usage.total), fraction: s.cpu.usage.total, color: Theme.cpu)
-                    popoverRow("GPU", s.gpu.deviceUtilization.map { Format.percent($0) } ?? "—", fraction: s.gpu.deviceUtilization, color: Theme.gpu)
-                    popoverRow("Memory", "\(Format.fixed(Double(s.memory.used) / 1_073_741_824, 1)) / \(Format.fixed(Double(s.memory.total) / 1_073_741_824, 0)) GB",
-                               fraction: s.memory.usedFraction, color: Theme.memory)
-                    HStack {
-                        Text("Pressure").foregroundStyle(.secondary)
-                        Spacer()
-                        Text(s.memory.pressure.label).foregroundStyle(Theme.color(for: s.memory.pressure))
-                        Text("· swap \(Format.bytes(s.memory.swapUsed))").foregroundStyle(.secondary)
-                    }
-                    HStack {
-                        Text("Thermal").foregroundStyle(.secondary)
-                        Spacer()
-                        Text(s.thermal.level.label).foregroundStyle(s.thermal.level.isConstrained ? Theme.color(for: s.thermal.level) : .primary)
-                    }
+                HStack(alignment: .top, spacing: 0) {
+                    column("CPU", value: Format.fixed(s.cpu.usage.total * 100, 0), unit: "%", fraction: s.cpu.usage.total, color: Theme.cpu)
+                    column("GPU", value: s.gpu.deviceUtilization.map { Format.fixed($0 * 100, 0) } ?? "—",
+                           unit: s.gpu.isAvailable ? "%" : nil, fraction: s.gpu.deviceUtilization ?? 0, color: Theme.gpu)
+                    column("Memory", value: Format.fixed(Double(s.memory.used) / 1_073_741_824, 1),
+                           unit: "/ \(Format.fixed(Double(s.memory.total) / 1_073_741_824, 0))G", fraction: s.memory.usedFraction, color: Theme.memory)
                 }
-                .font(.system(size: 12).monospacedDigit())
+                Text(statusLine(s))
+                    .font(.meta)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 12)
 
                 if let workload = engine.ai.featured {
-                    Divider()
                     PopoverAISection(workload: workload)
+                        .padding(.top, 16)
                 }
             } else {
                 Text("Open SiliconPulse to start monitoring.").font(.system(size: 12)).foregroundStyle(.secondary)
             }
 
-            Divider()
-            VStack(alignment: .leading, spacing: 2) {
-                PopoverButton(title: "Open SiliconPulse", shortcut: "") { openMain(section: nil) }
-                PopoverButton(title: "Settings…", shortcut: "") { openMain(section: .settings) }
-                PopoverButton(title: "Quit SiliconPulse", shortcut: "") { NSApp.terminate(nil) }
+            Divider().padding(.vertical, 10)
+            VStack(alignment: .leading, spacing: 1) {
+                PopoverButton(title: "Open SiliconPulse", symbol: "macwindow") { openMain(section: nil) }
+                PopoverButton(title: "Settings…", symbol: "gearshape") { openMain(section: .settings) }
+                PopoverButton(title: "Quit SiliconPulse", symbol: "power") { NSApp.terminate(nil) }
             }
+            .padding(.horizontal, -6)
         }
-        .padding(14)
-        .frame(width: 290)
+        .padding(16)
+        .frame(width: 300)
         .background {
             // ImageRenderer cannot draw AppKit views, so offscreen renders skip the tracker.
             if !alwaysLive {
@@ -72,12 +69,26 @@ struct MenuBarPopover: View {
         }
     }
 
-    private func popoverRow(_ label: String, _ value: String, fraction: Double?, color: Color) -> some View {
-        HStack(spacing: 8) {
-            Text(label).foregroundStyle(.secondary).frame(width: 56, alignment: .leading)
-            UsageBar(fraction: fraction ?? 0, color: color.opacity(fraction == nil ? 0 : 1), height: 4)
-            Text(value).frame(minWidth: 86, alignment: .trailing)
+    private func column(_ label: String, value: String, unit: String?, fraction: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label.uppercased()).font(.overline).tracking(0.6).foregroundStyle(.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 2) {
+                Text(value).font(.system(size: 22, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(value == "—" ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                if let unit, value != "—" {
+                    Text(unit).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                }
+            }
+            UsageBar(fraction: fraction, color: color, height: 3)
+                .padding(.trailing, 14)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func statusLine(_ s: SystemSnapshot) -> String {
+        var parts = ["Pressure \(s.memory.pressure.label.lowercased())", "swap \(Format.bytes(s.memory.swapUsed))"]
+        parts.append("thermal \(s.thermal.level.label.lowercased())")
+        return parts.joined(separator: " · ")
     }
 
     private func openMain(section: AppSection?) {
@@ -95,52 +106,60 @@ private struct PopoverAISection: View {
 
     var body: some View {
         let live = engine.liveProcessMetrics(for: workload)
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                SectionLabel(text: "Local AI")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 5) {
+                Overline(text: "Active model", color: workload.activity.isBusy ? Theme.ai : .secondary)
                 Spacer()
-                ActivityLabel(activity: workload.activity, lastActivity: workload.lastActivity)
+                ActivityLabel(activity: workload.activity, lastActivity: workload.lastActivity, state: workload.state)
             }
-            Text(workload.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-            Text(workload.runner.displayName + (workload.state == .modelLoaded ? "" : " · " + workload.state.label))
-                .font(.system(size: 11.5)).foregroundStyle(.secondary)
-            HStack(spacing: 14) {
-                if let tps = workload.tokensPerSecond.value {
-                    Text(Format.tokensPerSecond(tps)).foregroundStyle(workload.activity.isBusy ? .primary : .secondary)
-                        .help(workload.tokensPerSecond.note ?? "")
+            HStack(spacing: 10) {
+                RunnerGlyph(runner: workload.runner, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(workload.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                    Text(workload.runner.displayName).font(.meta).foregroundStyle(.secondary)
                 }
-                if let memory = workload.primaryModel?.sizeBytes ?? live.memory {
-                    Text(Format.bytes(memory))
-                        .help(workload.primaryModel?.sizeBytes != nil ? "Model memory reported by the runner" : "Runner process memory")
+                Spacer(minLength: 6)
+                VStack(alignment: .trailing, spacing: 1) {
+                    if let tps = workload.tokensPerSecond.value {
+                        Text(Format.tokensPerSecond(tps))
+                            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+                            .foregroundStyle(workload.activity.isBusy ? AnyShapeStyle(Theme.ai) : AnyShapeStyle(.secondary))
+                            .help(workload.tokensPerSecond.note ?? "")
+                    }
+                    if let memory = workload.primaryModel?.sizeBytes ?? live.memory {
+                        Text(Format.bytes(memory)).font(.meta.monospacedDigit()).foregroundStyle(.secondary)
+                            .help(workload.primaryModel?.sizeBytes != nil ? "Model memory reported by the runner" : "Runner process memory")
+                    }
                 }
-                if let cpu = live.cpu { Text("CPU \(Format.processCPU(cpu))%") }
             }
-            .font(.system(size: 12, weight: .medium).monospacedDigit())
+            .padding(10)
+            .background(Theme.ai.opacity(workload.activity.isBusy ? 0.09 : 0.05),
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.medium, style: .continuous))
         }
     }
 }
 
 private struct PopoverButton: View {
     var title: String
-    var shortcut: String
+    var symbol: String
     var action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack {
+            HStack(spacing: 8) {
+                Image(systemName: symbol).frame(width: 16).foregroundStyle(hovering ? Color.white : .secondary)
                 Text(title)
                 Spacer()
-                Text(shortcut).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
-            .background(hovering ? Color.accentColor.opacity(0.85) : .clear, in: RoundedRectangle(cornerRadius: 4))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(hovering ? Color.accentColor : .clear, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
             .foregroundStyle(hovering ? Color.white : .primary)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .font(.system(size: 12.5))
+        .font(.system(size: 13))
         .onHover { hovering = $0 }
     }
 }

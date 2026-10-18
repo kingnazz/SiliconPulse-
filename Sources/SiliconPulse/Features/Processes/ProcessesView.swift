@@ -35,20 +35,15 @@ struct ProcessesView: View {
         let aiPIDs = engine.ai.aiPIDs
         let rows = ProcessTable.apply(query, to: all, aiPIDs: aiPIDs, now: now)
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Picker("Filter", selection: $filter) {
-                    ForEach(ProcessFilter.allCases) { f in Text(f.label).tag(f) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(maxWidth: 520)
+            HStack(spacing: 12) {
+                ProcessFilterBar(filter: $filter, aiCount: all.filter { aiPIDs.contains($0.pid) }.count)
                 Spacer()
-                Text("\(rows.count) of \(all.count) processes")
-                    .font(.system(size: 11).monospacedDigit())
+                Text(rows.count == all.count ? "\(all.count) processes" : "\(rows.count) of \(all.count) processes")
+                    .font(.meta.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
             Divider()
 
             Table(rows.map { ProcessRow($0, now: now, isAI: aiPIDs.contains($0.pid)) }, selection: $selection, sortOrder: $sortOrder) {
@@ -56,6 +51,7 @@ struct ProcessesView: View {
                     HStack(spacing: 6) {
                         ProcessIcon(sample: row.iconSample)
                         Text(row.name).lineLimit(1).truncationMode(.middle)
+                            .foregroundStyle(row.isAI ? Theme.ai : .primary)
                         if row.isAI {
                             Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Theme.ai)
                                 .help("Part of a detected local AI workload")
@@ -65,7 +61,7 @@ struct ProcessesView: View {
                 .width(min: 170, ideal: 240)
 
                 TableColumn("PID", value: \.pid) { row in
-                    Text(String(row.pid)).font(.numeric).foregroundStyle(.secondary)
+                    Text(String(row.pid)).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .width(min: 44, ideal: 56, max: 70)
 
@@ -96,12 +92,12 @@ struct ProcessesView: View {
                 .width(min: 64, ideal: 78, max: 100)
 
                 TableColumn("Runtime", value: \.runtimeSort) { row in
-                    Text(row.runtime).font(.numeric).foregroundStyle(.secondary)
+                    Text(row.runtime).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .width(min: 60, ideal: 72, max: 96)
 
                 TableColumn("Arch", value: \.architecture) { row in
-                    Text(row.architecture).foregroundStyle(row.isRosetta ? Theme.caution : .secondary)
+                    Text(row.architecture).foregroundStyle(row.isRosetta ? AnyShapeStyle(Theme.caution) : AnyShapeStyle(.tertiary))
                 }
                 .width(min: 50, ideal: 64, max: 110)
 
@@ -203,6 +199,7 @@ struct RestrictedText: View {
         Text(text ?? "—")
             .font(.numeric)
             .foregroundStyle(text == nil ? .tertiary : .primary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .help(available ? "" : MetricCatalog.restricted.note ?? "")
     }
 }
@@ -258,5 +255,51 @@ struct ProcessRow: Identifiable, Equatable {
         diskReadSort = (p.diskReadSortValue / 1_000).rounded()
         diskWriteSort = (p.diskWriteSortValue / 1_000).rounded()
         runtimeSort = -p.startTime.rounded()
+    }
+}
+
+/// Category filter plus a separate "High usage" menu, instead of one crowded six-way control.
+struct ProcessFilterBar: View {
+    @Binding var filter: ProcessFilter
+    var aiCount: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Picker("Show", selection: Binding<ProcessFilter?>(
+                get: { [.all, .apps, .ai, .system].contains(filter) ? filter : nil },
+                set: { if let value = $0 { filter = value } })) {
+                Text("All").tag(ProcessFilter?.some(.all))
+                Text("Apps").tag(ProcessFilter?.some(.apps))
+                Text(aiCount > 0 ? "AI · \(aiCount)" : "AI").tag(ProcessFilter?.some(.ai))
+                Text("System").tag(ProcessFilter?.some(.system))
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            Menu {
+                Toggle("CPU above \(Int(ProcessFilter.highCPUThreshold))%", isOn: Binding(
+                    get: { filter == .highCPU }, set: { filter = $0 ? .highCPU : .all }))
+                Toggle("Memory above \(Format.bytes(ProcessFilter.highMemoryThreshold, decimals: 0))", isOn: Binding(
+                    get: { filter == .highMemory }, set: { filter = $0 ? .highMemory : .all }))
+                if filter == .highCPU || filter == .highMemory {
+                    Divider()
+                    Button("Show all") { filter = .all }
+                }
+            } label: {
+                Label(highUsageTitle, systemImage: "flame")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .foregroundStyle(filter == .highCPU || filter == .highMemory ? AnyShapeStyle(Theme.caution) : AnyShapeStyle(.secondary))
+        }
+    }
+
+    private var highUsageTitle: String {
+        switch filter {
+        case .highCPU: return "High CPU"
+        case .highMemory: return "High memory"
+        default: return "High usage"
+        }
     }
 }

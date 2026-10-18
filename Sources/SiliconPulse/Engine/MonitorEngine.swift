@@ -36,6 +36,7 @@ final class MonitorEngine {
     private(set) var activeSchedule = SamplingSchedule(system: 1, processes: 2, aiDiscovery: 5, slow: 10)
     private(set) var memoryPressure: MemoryPressure = .unknown
     private(set) var loadedModelCount = 0
+    private(set) var aiGenerating = false
     private(set) var machineSummary = ""
 
     /// Section the main window shows; set by the sidebar.
@@ -306,6 +307,8 @@ final class MonitorEngine {
             self.aiTask = nil
             let loaded = result.workloads.filter { $0.state == .modelLoaded }.count
             if self.loadedModelCount != loaded { self.loadedModelCount = loaded }
+            let generating = result.workloads.contains { $0.activity.isBusy }
+            if self.aiGenerating != generating { self.aiGenerating = generating }
             self.store.diagnostics.aiRefreshes += 1
             self.store.diagnostics.lastAIRefreshDuration = result.duration
             self.updateMenuBarTitle()
