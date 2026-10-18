@@ -131,6 +131,22 @@ Low Power Mode doubles every interval. Process static info (path, user, architec
 
 See [docs/METRICS.md](docs/METRICS.md) for every metric's collection method, accuracy class, cost, permissions and fallback.
 
+## Measured performance
+
+Every CI run builds the release app and drives it through a scripted session (`--profile`): dashboard visible, every screen, the window closed, ten rapid open/close cycles, then an 8-minute soak. SiliconPulse's own CPU time and footprint come from the kernel's accounting for the process (`getrusage`, `task_info` `phys_footprint`), cross-checked with `ps`. The latest results (`profile` artifact):
+
+| State | Average CPU (% of one core) | Footprint |
+|---|---|---|
+| Window closed, menu bar only (soak, 4 × 1 min) | 0.48–0.68% | 67.7 MB, flat |
+| Overview visible, 1 s sampling (soak, 4 × 1 min) | 2.8–4.0% | 68.1–68.3 MB, flat |
+| AI Models visible | 1.6–3.1% | ≈ 65 MB |
+| Processes visible (≈ 500-row table) | 8.7–11% | ≈ 75 MB |
+| 10 × open/close of the main window | ≈ 15% during the cycling | +5 MB, then stable |
+
+The sampling loop count stays at exactly 1 throughout, including the open/close cycles. Collector costs, in thread CPU per run: CPU 0.08 ms, memory 0.04 ms, GPU 0.2 ms, disk 0.2 ms, network 0.1 ms, process table (≈ 500 processes) 2.4 ms, per-process GPU accounting 1.3 ms, AI candidate inspection under 10 ms every 5–10 s.
+
+**Caveat:** these numbers come from a GitHub-hosted *virtual* M1 with 3 vCPUs and no GPU acceleration, so all SwiftUI rendering happens in software and the CPU is shared with CI work. Expect lower visible-window costs on a real Apple Silicon Mac. Sampling itself is a small share of the total; drawing the visible screen dominates, which is why everything slows down or stops publishing when nothing is on screen. The Processes screen is the most expensive view because re-sorting a ~500-row `NSTableView` re-measures rows, so the process table refreshes at most every 2 s.
+
 ## Known macOS limitations
 
 - **Other users' processes.** macOS only lets an unprivileged app read CPU, memory, thread and disk counters for processes owned by the same user. Root and system-daemon processes appear in the list with "—" and a *restricted* note; system totals still include them. SiliconPulse does not install a privileged helper.

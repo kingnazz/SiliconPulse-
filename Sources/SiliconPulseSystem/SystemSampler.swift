@@ -19,6 +19,8 @@ public actor SystemSampler {
     /// Listening ports per candidate, rescanned at most every `portRescanInterval` seconds.
     private var portCache: [ProcessIdentity: (ports: [UInt16], time: UInt64)] = [:]
     private let portRescanInterval: UInt64 = 15_000_000_000
+    /// Candidate classification never changes for a process, so it is decided once per PID + start time.
+    private var candidateCache: [ProcessIdentity: Bool] = [:]
 
     public init() {}
 
@@ -74,7 +76,7 @@ public actor SystemSampler {
     public func aiCandidates(from samples: [ProcessSample]) -> [AIProcessInfo] {
         let now = Clock.uptimeNanoseconds()
         let result = measure("AI candidates") {
-            samples.filter(AICandidateFilter.isCandidate).map { sample in
+            samples.filter(isCandidate).map { sample in
                 let args = sample.countersAvailable ? processes.arguments(for: sample.id) : nil
                 var environment: [String: String] = [:]
                 if let value = args?.environment["OLLAMA_HOST"] { environment["OLLAMA_HOST"] = value }
@@ -82,9 +84,19 @@ public actor SystemSampler {
                                      listeningPorts: sample.countersAvailable ? listeningPorts(for: sample.id, now: now) : [])
             }
         }
-        let alive = Set(samples.map(\.id))
-        portCache = portCache.filter { alive.contains($0.key) }
+        if candidateCache.count > samples.count + 256 {
+            let alive = Set(samples.map(\.id))
+            candidateCache = candidateCache.filter { alive.contains($0.key) }
+            portCache = portCache.filter { alive.contains($0.key) }
+        }
         return result
+    }
+
+    private func isCandidate(_ sample: ProcessSample) -> Bool {
+        if let cached = candidateCache[sample.id] { return cached }
+        let value = AICandidateFilter.isCandidate(sample)
+        candidateCache[sample.id] = value
+        return value
     }
 
     private func listeningPorts(for identity: ProcessIdentity, now: UInt64) -> [UInt16] {
