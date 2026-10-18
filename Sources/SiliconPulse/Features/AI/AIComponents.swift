@@ -27,7 +27,8 @@ struct AIMetricCell: View {
                 }
             }
             if let note {
-                Text(note).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
+                Text(note).font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -44,6 +45,8 @@ struct AIWorkloadSummary: View {
     var body: some View {
         let live = engine.liveProcessMetrics(for: workload)
         let model = workload.primaryModel
+        // Without a visible runner process (another user's, or in a container) PROCESS values cannot exist.
+        let hasProcess = !workload.processPIDs.isEmpty
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -82,13 +85,14 @@ struct AIWorkloadSummary: View {
                              note: workload.tokensPerSecond.note)
                 AIMetricCell(label: "System GPU", value: engine.system.gpu.deviceUtilization.map { Format.fixed($0 * 100, 0) }, unit: "%",
                              scope: .system, info: MetricCatalog.gpuDevice)
-                AIMetricCell(label: "Runner CPU", value: live.cpu.map { Format.processCPU($0) }, unit: "%",
-                             scope: .process, info: MetricCatalog.aiProcessCPU)
-                AIMetricCell(label: "Runner memory", value: live.memory.map { Format.bytes($0) },
-                             scope: .process, info: MetricCatalog.aiProcessMemory)
-                if !compact || model?.sizeBytes != nil {
-                    AIMetricCell(label: "Model memory", value: model?.sizeBytes.map { Format.bytes($0) },
-                                 scope: .model, info: MetricCatalog.aiModelMemory)
+                if hasProcess {
+                    AIMetricCell(label: "Runner CPU", value: live.cpu.map { Format.processCPU($0) }, unit: "%",
+                                 scope: .process, info: MetricCatalog.aiProcessCPU)
+                    AIMetricCell(label: "Runner memory", value: live.memory.map { Format.bytes($0) },
+                                 scope: .process, info: MetricCatalog.aiProcessMemory)
+                }
+                if let size = model?.sizeBytes {
+                    AIMetricCell(label: "Model memory", value: Format.bytes(size), scope: .model, info: MetricCatalog.aiModelMemory)
                 }
                 AIMetricCell(label: "Context", value: model?.contextLength.map(Format.integer), unit: "tokens",
                              scope: .model, info: MetricCatalog.aiContext)
@@ -99,12 +103,18 @@ struct AIWorkloadSummary: View {
                     AIMetricCell(label: "GPU layers", value: String(layers), scope: .model, info: MetricCatalog.aiGPUOffload,
                                  note: "From -ngl launch argument")
                 }
-                if engine.perProcessGPUSupported == true || live.gpu != nil {
+                if hasProcess && (engine.perProcessGPUSupported == true || live.gpu != nil) {
                     AIMetricCell(label: "Runner GPU time", value: live.gpu.map { Format.fixed(min($0, 1) * 100, 0) }, unit: "%",
                                  scope: .process, info: MetricCatalog.aiProcessGPU, quality: .estimated)
                 }
-                AIMetricCell(label: "Runtime", value: workload.runtime(now: engine.system.timestamp).map(Format.duration),
-                             scope: .process, info: MetricCatalog.aiRuntime)
+                if hasProcess {
+                    AIMetricCell(label: "Runtime", value: workload.runtime(now: engine.system.timestamp).map(Format.duration),
+                                 scope: .process, info: MetricCatalog.aiRuntime)
+                }
+            }
+
+            if !hasProcess {
+                LimitationNote(text: "The runner's process is not visible to SiliconPulse (another user's process or a container), so only API-reported values are shown.")
             }
 
             if let timeline = engine.ai.timelines[workload.id] {

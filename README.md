@@ -23,13 +23,15 @@ It shows only what macOS (or the runner itself) actually exposes. Every value ca
 
 ## Screenshots
 
-Screenshots in `docs/screenshots/` are captured by SiliconPulse's own `--profile` mode on a GitHub Actions macOS runner (a virtual machine, so there is no GPU utilization and no local AI runtime in them).
+These screenshots come from SiliconPulse's own `--profile` mode on a GitHub Actions macOS runner. That runner is an Apple M1 *virtual machine*, so there is no GPU utilization (the paravirtual GPU does not report it) and its CPU is busy with CI work. The local AI workloads shown are `scripts/mock-runners.py`, a test-only mock of the Ollama and llama-server APIs (the model names say "mock"), not real runners.
 
-| Overview | Processes |
+| Overview | AI Models |
 |---|---|
-| ![Overview](docs/screenshots/overview.png) | ![Processes](docs/screenshots/processes.png) |
-| **Memory** | **Compute** |
-| ![Memory](docs/screenshots/memory.png) | ![Compute](docs/screenshots/compute.png) |
+| ![Overview](docs/screenshots/overview.png) | ![AI Models](docs/screenshots/ai.png) |
+| **Processes** | **Memory** |
+| ![Processes](docs/screenshots/processes.png) | ![Memory](docs/screenshots/memory.png) |
+| **Compute** | **Menu bar popover** |
+| ![Compute](docs/screenshots/compute.png) | ![Popover](docs/screenshots/menubar-popover.png) |
 
 ## Features
 

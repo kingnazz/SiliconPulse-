@@ -93,11 +93,20 @@ public struct AIMonitorResult: Sendable {
 
     public static let empty = AIMonitorResult(workloads: [], statuses: [], timelines: [:], timestamp: .distantPast, duration: 0)
 
-    /// The workload to feature in Overview and the menu bar.
+    /// How long a workload stays featured after its last inference activity, so the Overview card and
+    /// menu bar do not flip between runners every time one pauses between requests.
+    public static let featuredStickiness: TimeInterval = 60
+
+    /// The workload to feature in Overview and the menu bar: the most recently active loaded model,
+    /// else any loaded model, else any detected runner.
     public var featured: AIWorkload? {
-        workloads.first { $0.state == .modelLoaded && $0.activity.isBusy }
-            ?? workloads.first { $0.state == .modelLoaded }
-            ?? workloads.first
+        let loaded = workloads.filter { $0.state == .modelLoaded || ($0.state == .processOnly && !$0.models.isEmpty) }
+        let recent = loaded.compactMap { w -> (AIWorkload, Date)? in
+            guard let last = w.lastActivity, timestamp.timeIntervalSince(last) <= Self.featuredStickiness else { return nil }
+            return (w, last)
+        }
+        if let mostRecent = recent.max(by: { $0.1 < $1.1 }) { return mostRecent.0 }
+        return loaded.first ?? workloads.first
     }
 
     public var aiPIDs: Set<Int32> { Set(workloads.flatMap(\.processPIDs)) }

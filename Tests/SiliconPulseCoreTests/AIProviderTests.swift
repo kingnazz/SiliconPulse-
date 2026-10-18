@@ -398,3 +398,32 @@ final class AIProviderTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 5)
     }
 }
+
+final class FeaturedWorkloadTests: XCTestCase {
+    private func workload(_ id: String, state: AIWorkloadState = .modelLoaded, lastActivity: Date?) -> AIWorkload {
+        var w = AIWorkload(id: id, runner: .ollama, state: state, models: [AIModelInfo(identifier: id, source: "test")])
+        w.lastActivity = lastActivity
+        return w
+    }
+
+    func testFeaturedPrefersMostRecentlyActiveAndStaysPut() {
+        let now = Date(timeIntervalSinceReferenceDate: 10_000)
+        // Both loaded; b was active 20 s ago, a 50 s ago: b stays featured while it pauses between requests.
+        let result = AIMonitorResult(workloads: [workload("a", lastActivity: now.addingTimeInterval(-50)),
+                                                 workload("b", lastActivity: now.addingTimeInterval(-20))],
+                                     statuses: [], timelines: [:], timestamp: now, duration: 0)
+        XCTAssertEqual(result.featured?.id, "b")
+    }
+
+    func testFeaturedFallsBackToLoadedThenAny() {
+        let now = Date(timeIntervalSinceReferenceDate: 10_000)
+        let stale = AIMonitorResult(workloads: [workload("idle", state: .idle, lastActivity: nil),
+                                                workload("loaded", lastActivity: now.addingTimeInterval(-600))],
+                                    statuses: [], timelines: [:], timestamp: now, duration: 0)
+        XCTAssertEqual(stale.featured?.id, "loaded")
+        let none = AIMonitorResult(workloads: [workload("idle", state: .apiUnreachable, lastActivity: nil)],
+                                   statuses: [], timelines: [:], timestamp: now, duration: 0)
+        XCTAssertEqual(none.featured?.id, "idle")
+        XCTAssertNil(AIMonitorResult.empty.featured)
+    }
+}
