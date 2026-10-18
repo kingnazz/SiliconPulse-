@@ -108,3 +108,123 @@ jobs:
           path: |
             shots/
             shots.log
+
+  real-runner:
+    # A real runtime serving a real model on the macOS runner (an Apple Silicon *virtual machine*).
+    # If the VM cannot run the runtime (for example MLX without a usable Metal device), the job
+    # reports that explicitly in its summary instead of pretending to have tested it.
+    name: Real runner (${{ matrix.runner }})
+    runs-on: macos-15
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ollama, omlx]
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        if: matrix.runner == 'omlx'
+        with:
+          python-version: "3.11"
+      - name: Start ${{ matrix.runner }} with a real model
+        id: runner
+        run: |
+          available=true
+          reason=""
+          if [ "${{ matrix.runner }}" = "ollama" ]; then
+            base=http://127.0.0.1:11434
+            model=qwen2.5:0.5b
+            brew install ollama > install.log 2>&1 || { available=false; reason="brew install ollama failed"; }
+            if $available; then
+              ollama serve > runner.log 2>&1 &
+              echo $! > server.pid
+              for _ in $(seq 1 30); do curl -sf $base/api/version > /dev/null && break; sleep 1; done
+              ollama pull $model >> install.log 2>&1 || { available=false; reason="ollama pull $model failed"; }
+            fi
+            gen() { curl -sf -m 300 $base/api/generate -d "{\"model\":\"$model\",\"prompt\":\"Say hello.\",\"stream\":false,\"options\":{\"num_predict\":$1}}"; }
+          else
+            base=http://127.0.0.1:8123
+            model=Qwen2.5-0.5B-Instruct-4bit
+            python -m venv "$HOME/omlx-venv"
+            # Pinned to the v0.7.1rc1 commit.
+            "$HOME/omlx-venv/bin/pip" install -q "omlx @ git+https://github.com/jundot/omlx@7a5a3d75ce7463300bdfa5fedccd34348f60ff46" > install.log 2>&1 \
+              || { available=false; reason="pip install omlx failed"; }
+            if $available; then
+              "$HOME/omlx-venv/bin/python" -c "import mlx.core as mx; print('MLX device:', mx.default_device()); print((mx.array([1.0]) + 1).item())" >> install.log 2>&1 \
+                || { available=false; reason="MLX cannot run on this VM (no usable Metal device)"; }
+            fi
+            if $available; then
+              "$HOME/omlx-venv/bin/python" -c "import os; from huggingface_hub import snapshot_download; snapshot_download('mlx-community/$model', local_dir=os.path.expanduser('~/omlx-models/$model'))" >> install.log 2>&1 \
+                || { available=false; reason="model download failed"; }
+            fi
+            if $available; then
+              "$HOME/omlx-venv/bin/omlx" serve --model-dir "$HOME/omlx-models" --port 8123 > runner.log 2>&1 &
+              echo $! > server.pid
+              for _ in $(seq 1 180); do curl -sf $base/health > /dev/null && break; sleep 1; done
+            fi
+            gen() { curl -sf -m 300 $base/v1/chat/completions -H 'Content-Type: application/json' -d "{\"model\":\"$model\",\"max_tokens\":$1,\"messages\":[{\"role\":\"user\",\"content\":\"Say hello.\"}]}"; }
+          fi
+          if $available && ! gen 8 > first-generation.json 2>> runner.log; then
+            available=false; reason="${reason:-the runtime started but could not generate on this VM}"
+          fi
+          echo "available=$available" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "model=$model" >> "$GITHUB_OUTPUT"
+          echo "pid=$(cat server.pid 2>/dev/null || echo 0)" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          cat first-generation.json 2>/dev/null | head -c 400 || true
+          echo
+          ps -axo pid,ppid,rss,comm,args | grep -Ei "ollama|omlx" | grep -v grep || true
+      - name: Not runnable on this VM
+        if: steps.runner.outputs.available != 'true'
+        run: |
+          echo "### ${{ matrix.runner }}: not testable on this runner" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reason: ${{ steps.runner.outputs.reason }}. No real-runner result is claimed for it." >> "$GITHUB_STEP_SUMMARY"
+          tail -40 install.log runner.log 2>/dev/null || true
+      - name: Screenshots with the real runner
+        if: steps.runner.outputs.available == 'true'
+        run: |
+          scripts/build-app.sh > build-app.log 2>&1
+          defaults write app.siliconpulse.SiliconPulse hasCompletedOnboarding -bool true
+          # Keep the model busy part of the time, as a user would.
+          ( while true; do scripts/real-runner-load.sh "${{ matrix.runner }}" "${{ steps.runner.outputs.base }}" "${{ steps.runner.outputs.model }}"; sleep 4; done ) > load.log 2>&1 &
+          LOAD=$!
+          build/SiliconPulse.app/Contents/MacOS/SiliconPulse --screenshots "$PWD/real-shots" > real-shots.log 2>&1 &
+          PID=$!
+          for _ in $(seq 1 240); do kill -0 $PID 2>/dev/null || break; sleep 1; done
+          kill $PID $LOAD 2>/dev/null || true
+          ls real-shots | head -40
+      - name: Lifecycle test (detect, generate, idle, unload, exit)
+        if: steps.runner.outputs.available == 'true'
+        env:
+          SILICONPULSE_REAL_RUNNER: ${{ matrix.runner }}
+          SILICONPULSE_REAL_BASE: ${{ steps.runner.outputs.base }}
+          SILICONPULSE_REAL_MODEL: ${{ steps.runner.outputs.model }}
+          SILICONPULSE_REAL_SERVER_PID: ${{ steps.runner.outputs.pid }}
+        run: |
+          swift test --filter RealRunnerTests 2>&1 | tee real-test.log
+          grep -q "Executed 1 test, with 0 failures" real-test.log
+          {
+            echo "### ${{ matrix.runner }} with ${{ steps.runner.outputs.model }}"
+            echo '```'
+            grep "REAL-RUNNER" real-test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload real-runner results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-runner-${{ matrix.runner }}
+          path: |
+            real-shots/
+            real-shots.log
+            real-test.log
+            runner.log
+            install.log
+            first-generation.json
