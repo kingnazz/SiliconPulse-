@@ -3,7 +3,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @Environment(MonitorEngine.self) private var engine
-    @State private var window: HistoryWindow = .thirtyMinutes
+    @State private var window: HistoryWindow = .fiveMinutes
 
     var body: some View {
         let history = engine.history
@@ -19,7 +19,8 @@ struct HistoryView: View {
             row("CPU", info: MetricCatalog.cpuTotal, series: [ChartSeries(points: history[.cpu].points(for: window), color: Theme.cpu, label: "CPU")],
                 metric: .cpu, maxValue: 1, format: { Format.percent($0) })
             row("GPU", info: MetricCatalog.gpuDevice, series: [ChartSeries(points: history[.gpu].points(for: window), color: Theme.gpu, label: "GPU")],
-                metric: .gpu, maxValue: 1, format: { Format.percent($0) })
+                metric: .gpu, maxValue: 1, format: { Format.percent($0) },
+                emptyMessage: engine.system.gpu.isAvailable ? nil : "GPU utilization is not reported on this Mac")
             row("Memory", info: MetricCatalog.memoryUsed,
                 series: [ChartSeries(points: history[.memoryUsed].points(for: window), color: Theme.memory, label: "Used"),
                          ChartSeries(points: history[.memoryCompressed].points(for: window), color: Theme.caution, label: "Compressed", dashed: true),
@@ -37,11 +38,11 @@ struct HistoryView: View {
     }
 
     private func row(_ title: String, info: MetricInfo, series: [ChartSeries], metric: HistoryMetric, maxValue: Double?,
-                     format: @escaping (Double) -> String) -> some View {
+                     format: @escaping (Double) -> String, emptyMessage: String? = nil) -> some View {
         let s = engine.history[metric]
         let summary = [s.average(in: window).map { "avg " + format($0) }, s.maximum(in: window).map { "peak " + format($0) }]
             .compactMap { $0 }.joined(separator: " · ")
         return ChartCard(title: title, value: summary.isEmpty ? "—" : summary, info: info, series: series, window: window,
-                         maxValue: maxValue, format: format, height: 120)
+                         maxValue: maxValue, format: format, height: 120, emptyMessage: emptyMessage)
     }
 }
