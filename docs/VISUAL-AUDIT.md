@@ -92,3 +92,27 @@ The app is clean and correct, but it reads as an engineering dashboard: a grid o
 5. **Fewer containers.** Three surface levels (page, raised section, emphasized), with hierarchy from type, spacing and hairlines before boxes.
 6. **Sentence-case labels.** Uppercase only for a couple of deliberate markers.
 7. **Lightweight motion.** One Core Animation pulse for live inference, which stops when idle and respects Reduce Motion; no per-sample number animation.
+
+## After the redesign
+
+Captured with `--screenshots` in CI, in light and dark, at 920, 1180 and 1600 pt wide. The final captures are in `docs/screenshots/`.
+
+| Area | Before | After |
+|---|---|---|
+| Overview | Five equal tiles, an equal chart grid, Local AI below the fold | Machine name and health, then CPU, GPU and memory as one instrument with hero numbers and charts. Pressure, thermal and swap share one quiet line (a banner when abnormal). The Active Model hero follows, then small disk, network and top-process lists |
+| AI Models | Panels of evidence before the model | A hero per runtime with tokens/sec, GPU, memory and CPU (system GPU always labeled whole Mac). Model facts, evidence and scope are behind one disclosure; detection details are collapsed |
+| Quality marks | About 15 ⓘ icons and a badge on every value | Sources on hover; only *Estimated* is visible; unavailable values show a dash and the reason |
+| Memory | A boxed top section, two similar boxed panels, and no free memory in the bar | A 44 pt used value, then pressure, swap and headroom. A composition bar shows app, wired, compressed, cached and free memory |
+| Compute | Boxed CPU and GPU side panels, and full panels for the Neural Engine and thermal | A hero CPU number with P/E clusters, a 130 pt chart and per-core bars grouped by cluster. GPU readouts and per-process GPU time follow; the Neural Engine is one limitation line |
+| Processes | Six-segment filter, left-aligned numbers | Four-way segmented filter plus a "High usage" menu, right-aligned numerics, AI rows tinted, and a calmer inspector |
+| Popover | A list of label, bar and value rows, with the AI block as a footnote | Brand, health, three columns with bars, a status line, the active model, and hover-highlighted actions |
+| Sidebar | No identity; a count on AI Models | Brand mark, a live pulse on AI Models while a model generates, and a quiet "Live · Local only" footer |
+| Surfaces | Grey slabs, visible borders | A page color plus two translucent levels; hairline borders only on the emphasized AI hero |
+| Icon | Generic | A graphite die with pins and a pulse trace, the same mark as the menu-bar template image |
+
+### Still worth more work
+
+- **Settings** is the stock grouped `Form`. It is native and readable but has not had the same typographic pass.
+- **Compute on a Mac with no GPU utilization or P/E data** (such as the CI virtual machine) is sparse. A real Apple Silicon Mac fills the GPU section and the cluster groups.
+- **Sidebar icons in dark captures** look dimmer than on a real display, because offscreen capture skips sidebar vibrancy.
+- **History** could share one hover rule across its three stacked charts.

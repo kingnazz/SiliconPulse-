@@ -19,7 +19,7 @@ SiliconPulse answers, at a glance:
 - What model is loaded, in which runner, and is it generating right now?
 - Is the Mac thermally constrained?
 
-It shows only what macOS (or the runner itself) actually exposes. Every value carries a quality label (**exact**, **reported**, **calculated**, **estimated** or **unavailable**), and hovering the ⓘ shows where it comes from. When macOS does not expose something, SiliconPulse says so instead of inventing a number.
+It shows only what macOS (or the runner itself) actually exposes. Every value has a quality class (**exact**, **reported**, **calculated**, **estimated** or **unavailable**). Measured values stay clean, and hovering any value shows its source and class. Estimated values are marked *Estimated* on screen, and unavailable ones show a dash and the reason. When macOS does not expose something, SiliconPulse says so instead of inventing a number.
 
 ## Screenshots
 
