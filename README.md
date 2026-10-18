@@ -137,15 +137,15 @@ See [docs/METRICS.md](docs/METRICS.md) for every metric's collection method, acc
 
 ## Measured performance
 
-Every CI run builds the release app and drives it through a scripted session (`--profile`): dashboard visible, every screen, the window closed, ten rapid open/close cycles, then an 8-minute soak. SiliconPulse's own CPU time and footprint come from the kernel's accounting for the process (`getrusage`, `task_info` `phys_footprint`), cross-checked with `ps`. Ranges below span the last two CI runs (`profile` artifact):
+Every CI run builds the release app and drives it through a scripted session (`--profile`): dashboard visible, every screen, the window closed, ten rapid open/close cycles, then an 8-minute soak. SiliconPulse's own CPU time and footprint come from the kernel's accounting for the process (`getrusage`, `task_info` `phys_footprint`), cross-checked with `ps`. Ranges below span the last three CI runs (`profile` artifact):
 
 | State | Average CPU (% of one core) | Footprint |
 |---|---|---|
-| Window closed, menu bar only (soak, 4 × 1 min) | 0.26–0.69% | 67.0–71.1 MB, flat |
+| Window closed, menu bar only (soak, 4 × 1 min) | 0.21–0.69% | 67.0–71.1 MB, flat |
 | Overview visible, 1 s sampling (soak, 4 × 1 min) | 2.9–4.8% | 67.2–71.1 MB, flat |
 | AI Models visible | 1.6–2.5% | ≈ 62 MB |
-| Processes visible (≈ 500-row table) | 11.1–15.4% | ≈ 71–73 MB |
-| 10 × open/close of the main window | ≈ 22% during the cycling | +2–5 MB, then stable |
+| Processes visible (≈ 500-row table) | 10.8–15.4% (15.4% was a single outlier) | ≈ 71–75 MB |
+| 10 × open/close of the main window | 20–22% during the cycling | +2–5 MB, then stable |
 
 The sampling loop count stays at exactly 1 throughout, including the open/close cycles. Collector costs, in thread CPU per run: CPU 0.1 ms, memory 0.05 ms, GPU 0.3 ms, disk 0.3 ms, network 0.15 ms, process table (≈ 500 processes) 2.4–3.2 ms, per-process GPU accounting 1.3–1.8 ms, AI candidate inspection 0.3 ms (plus localhost API calls, run off the main thread every 5–10 s).
 
