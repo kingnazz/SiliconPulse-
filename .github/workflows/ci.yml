@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-linux:
+    name: Core tests (Linux)
+    runs-on: ubuntu-latest
+    container: swift:6.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test platform-independent core
+        run: swift test --parallel
+
+  macos:
+    name: Build, test & profile (macOS)
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: |
+          sw_vers
+          uname -m
+          xcodebuild -version
+          swift --version
+      - name: Build (release)
+        run: swift build -c release 2>&1 | tee build.log
+      - name: Warnings
+        run: grep -E "warning:" build.log | sort -u || echo "No warnings"
+      - name: Test
+        run: swift test 2>&1 | tee test.log
+      - name: Bundle app
+        run: scripts/build-app.sh
+      - name: Smoke run and profile
+        run: scripts/profile-app.sh build/SiliconPulse.app profile
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: SiliconPulse-app
+          path: build/SiliconPulse.zip
+      - name: Upload profile & screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile
+          path: |
+            profile/
+            build.log
+            test.log
