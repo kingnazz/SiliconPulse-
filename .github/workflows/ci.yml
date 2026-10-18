@@ -53,6 +53,7 @@ jobs:
       - name: Smoke run and profile
         env:
           SILICONPULSE_EXPECT_AI: "1"
+          SILICONPULSE_SOAK_MINUTES: "4"
         run: scripts/profile-app.sh build/SiliconPulse.app profile
       - name: Upload app
         uses: actions/upload-artifact@v4

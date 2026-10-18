@@ -39,8 +39,9 @@ START=$(date +%s)
 ( take_sample 14 overview; take_sample 74 processes; take_sample 118 hidden ) &
 SAMPLER=$!
 
-# The scripted run takes about three and a half minutes; stop it if it hangs.
-for _ in $(seq 1 360); do
+# The scripted run takes about three and a half minutes plus any soak; stop it if it hangs.
+LIMIT=$((360 + ${SILICONPULSE_SOAK_MINUTES:-0} * 2 * 60))
+for _ in $(seq 1 "$LIMIT"); do
   kill -0 "$PID" 2>/dev/null || break
   sleep 1
 done

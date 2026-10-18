@@ -109,6 +109,25 @@ final class ProfileRunner {
         await measure("Window reopened · Overview", seconds: 20)
         capture(name: "overview-final")
 
+        // Optional soak (SILICONPULSE_SOAK_MINUTES): minutes with the dashboard visible, then minutes with the
+        // window closed. Memory must plateau: a steady climb would mean something is unbounded.
+        let soakMinutes = Int(ProcessInfo.processInfo.environment["SILICONPULSE_SOAK_MINUTES"] ?? "") ?? 0
+        if soakMinutes > 0 {
+            let firstSoakPhase = phases.count
+            for minute in 1...soakMinutes { await measure("Soak · window visible · minute \(minute)", seconds: 60) }
+            closeMainWindow()
+            for minute in 1...soakMinutes { await measure("Soak · window closed · minute \(minute)", seconds: 60) }
+            let soak = Array(phases[firstSoakPhase...])
+            // Ignore the first visible minute (caches warm up) and compare like with like.
+            if soak.count >= 4 {
+                let visibleGrowth = soak[soakMinutes - 1].footprintEndMB - soak[1].footprintStartMB
+                let hiddenGrowth = soak[soak.count - 1].footprintEndMB - soak[soakMinutes + 1].footprintStartMB
+                if visibleGrowth > 8 { problems.append("Footprint grew \(Format.fixed(visibleGrowth, 1)) MB during the visible soak") }
+                if hiddenGrowth > 8 { problems.append("Footprint grew \(Format.fixed(hiddenGrowth, 1)) MB during the hidden soak") }
+            }
+            if engine.latestDiagnostics.activeLoops != 1 { problems.append("Loop count changed during soak") }
+        }
+
         writeReport()
         try? await Task.sleep(nanoseconds: 500_000_000)
         NSApp.terminate(nil)
