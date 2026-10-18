@@ -1,0 +1,365 @@
+import SiliconPulseCore
+import SwiftUI
+
+struct ProcessesView: View {
+    @Environment(MonitorEngine.self) private var engine
+    @State private var search = ""
+    @State private var filter: ProcessFilter = .all
+    @State private var sortOrder = [KeyPathComparator(\ProcessRow.cpuSort, order: .reverse)]
+    @State private var selection: ProcessIdentity?
+    @State private var showInspector = false
+
+    /// Column key paths → core sort keys. Rows are sorted by `ProcessTable`, not by the Table itself.
+    private static let sortKeys: [PartialKeyPath<ProcessRow>: ProcessSortKey] = [
+        \ProcessRow.name: .name,
+        \ProcessRow.pid: .pid,
+        \ProcessRow.cpuSort: .cpu,
+        \ProcessRow.memorySort: .memory,
+        \ProcessRow.threadSort: .threads,
+        \ProcessRow.diskReadSort: .diskRead,
+        \ProcessRow.diskWriteSort: .diskWrite,
+        \ProcessRow.runtimeSort: .runtime,
+        \ProcessRow.userName: .user,
+    ]
+
+    private var query: ProcessQuery {
+        let comparator = sortOrder.first
+        let key = comparator.flatMap { Self.sortKeys[$0.keyPath] } ?? .cpu
+        return ProcessQuery(search: search, filter: filter, sortKey: key, ascending: comparator?.order == .forward)
+    }
+
+    var body: some View {
+        let now = engine.system.timestamp
+        let all = engine.processes
+        let aiPIDs = engine.ai.aiPIDs
+        let rows = ProcessTable.apply(query, to: all, aiPIDs: aiPIDs, now: now)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                ProcessFilterBar(filter: $filter, aiCount: all.filter { aiPIDs.contains($0.pid) }.count)
+                Spacer()
+                Text(rows.count == all.count ? "\(all.count) processes" : "\(rows.count) of \(all.count) processes")
+                    .font(.meta.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            Divider()
+
+            Table(rows.map { ProcessRow($0, now: now, isAI: aiPIDs.contains($0.pid)) }, selection: $selection, sortOrder: $sortOrder) {
+                TableColumn("Process", value: \.name) { row in
+                    HStack(spacing: 6) {
+                        ProcessIcon(sample: row.iconSample)
+                        Text(row.name).lineLimit(1).truncationMode(.middle)
+                            .foregroundStyle(row.isAI ? Theme.ai : .primary)
+                        if row.isAI {
+                            Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Theme.ai)
+                                .help("Part of a detected local AI workload")
+                        }
+                        // Architecture is only worth a column's width when it is unusual.
+                        if row.isRosetta {
+                            Text("Rosetta").font(.system(size: 9.5, weight: .medium)).foregroundStyle(Theme.caution)
+                                .help("Intel code running under Rosetta translation")
+                        }
+                    }
+                }
+                .width(min: 170, ideal: 240)
+
+                TableColumn("PID", value: \.pid) { row in
+                    Text(String(row.pid)).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .width(min: 44, ideal: 56, max: 70)
+
+                TableColumn("CPU %", value: \.cpuSort) { row in
+                    RestrictedText(row.cpu, available: row.countersAvailable)
+                        .foregroundStyle(row.isHighCPU ? Theme.caution : .primary)
+                }
+                .width(min: 52, ideal: 60, max: 72)
+
+                TableColumn("Memory", value: \.memorySort) { row in
+                    RestrictedText(row.memory, available: row.countersAvailable)
+                }
+                .width(min: 64, ideal: 76, max: 90)
+
+                TableColumn("Threads", value: \.threadSort) { row in
+                    RestrictedText(row.threads, available: row.countersAvailable)
+                }
+                .width(min: 46, ideal: 56, max: 64)
+
+                TableColumn("Disk Read", value: \.diskReadSort) { row in
+                    RestrictedText(row.diskRead, available: row.countersAvailable)
+                }
+                .width(min: 64, ideal: 76, max: 90)
+
+                TableColumn("Disk Write", value: \.diskWriteSort) { row in
+                    RestrictedText(row.diskWrite, available: row.countersAvailable)
+                }
+                .width(min: 64, ideal: 76, max: 90)
+
+                TableColumn("Runtime", value: \.runtimeSort) { row in
+                    Text(row.runtime).font(.numeric).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .width(min: 60, ideal: 70, max: 84)
+
+                TableColumn("User", value: \.userName) { row in
+                    Text(row.userName).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .width(min: 50, ideal: 76, max: 110)
+            }
+            .tableStyle(.inset(alternatesRowBackgrounds: true))
+            .font(.system(size: 12))
+            .background(FixedRowHeight(height: 24))
+            .contextMenu(forSelectionType: ProcessIdentity.self) { ids in
+                if let id = ids.first, let p = all.first(where: { $0.id == id }) {
+                    Button("Copy PID") { copy(String(p.pid)) }
+                    if let path = p.executablePath {
+                        Button("Copy Executable Path") { copy(path) }
+                        Button("Reveal in Finder") { NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "") }
+                    }
+                }
+            } primaryAction: { ids in
+                selection = ids.first
+                showInspector = true
+            }
+
+            Divider()
+            footer(all: all)
+        }
+        .searchable(text: $search, placement: .toolbar, prompt: "Name, PID, bundle ID or path")
+        .inspector(isPresented: $showInspector) {
+            Group {
+                if let selection {
+                    ProcessInspector(identity: selection, selection: $selection)
+                } else {
+                    EmptyStateView(symbol: "sidebar.right", title: "No process selected", message: "Select a process to inspect it.")
+                }
+            }
+            .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
+        }
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    showInspector.toggle()
+                } label: {
+                    Label("Inspector", systemImage: "sidebar.right")
+                }
+                .help("Show or hide the process inspector")
+            }
+        }
+        .onChange(of: selection) { _, newValue in
+            // Defer: changing observed state inside the table's selection callback is reentrant for NSTableView.
+            Task { @MainActor in engine.inspect(newValue) }
+            if newValue != nil { showInspector = true }
+        }
+        .onAppear {
+            if let inspected = engine.inspected?.identity {
+                selection = inspected
+                showInspector = true
+            }
+        }
+        .onDisappear { engine.inspect(nil) }
+    }
+
+    private func footer(all: [ProcessSample]) -> some View {
+        let restricted = all.filter { !$0.countersAvailable }.count
+        let rosetta = all.filter { $0.architecture == .rosetta }.count
+        return HStack(spacing: 14) {
+            if restricted > 0 {
+                Label("\(restricted) restricted", systemImage: "lock")
+                    .help(MetricCatalog.restricted.tooltip)
+            }
+            if rosetta > 0 {
+                Label("\(rosetta) under Rosetta", systemImage: "cpu")
+            }
+            Spacer()
+            Text("Updated every \(Format.fixed(engine.activeSchedule.processes, engine.activeSchedule.processes < 1 ? 1 : 0)) s")
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
+/// Shows "—" with an explanation for restricted processes.
+struct RestrictedText: View {
+    var text: String?
+    var available: Bool
+
+    init(_ text: String?, available: Bool) {
+        self.text = text
+        self.available = available
+    }
+
+    var body: some View {
+        // The explanation is attached only to restricted cells; a tooltip on every cell of a 500-row
+        // table is measurable work for nothing.
+        if available {
+            value
+        } else {
+            value.help(MetricCatalog.restricted.note ?? "")
+        }
+    }
+
+    private var value: some View {
+        Text(text ?? "—")
+            .font(.numeric)
+            .foregroundStyle(text == nil ? .tertiary : .primary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+/// Gives the enclosing SwiftUI `Table` a fixed row height. Every process row is a single line, but
+/// SwiftUI tables measure each visible row's height again on every update (automatic row heights),
+/// which was about a third of the Processes screen's table-update cost.
+struct FixedRowHeight: NSViewRepresentable {
+    var height: CGFloat
+
+    func makeNSView(context: Context) -> Probe { Probe(height: height) }
+    func updateNSView(_ view: Probe, context: Context) { view.apply() }
+
+    final class Probe: NSView {
+        let height: CGFloat
+        private weak var table: NSTableView?
+
+        init(height: CGFloat) {
+            self.height = height
+            super.init(frame: .zero)
+        }
+
+        required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            // The table is laid out in the same pass; look for it once that pass is done.
+            Task { @MainActor [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            if table == nil { table = findTable() }
+            guard let table, table.usesAutomaticRowHeights || table.rowHeight != height else { return }
+            table.usesAutomaticRowHeights = false
+            table.rowHeight = height
+        }
+
+        /// The table whose scroll view occupies the same place as this background view
+        /// (the sidebar is also a table, so the first one found is not enough).
+        private func findTable() -> NSTableView? {
+            guard let window, let root = window.contentView else { return nil }
+            let mine = convert(bounds, to: nil)
+            var stack: [NSView] = [root]
+            while let view = stack.popLast() {
+                if let table = view as? NSTableView, let scroll = table.enclosingScrollView {
+                    let frame = scroll.convert(scroll.bounds, to: nil)
+                    if frame.intersects(mine), abs(frame.midX - mine.midX) < 40 { return table }
+                }
+                stack.append(contentsOf: view.subviews)
+            }
+            return nil
+        }
+    }
+}
+
+/// What one table row displays. Values are pre-formatted at display precision, so rows whose visible
+/// values did not change compare equal and SwiftUI leaves their cells alone; most processes are idle,
+/// so this keeps a 500-row table cheap to refresh every second.
+struct ProcessRow: Identifiable, Equatable {
+    let id: ProcessIdentity
+    let pid: Int32
+    let name: String
+    let iconSample: ProcessSample
+    let isAI: Bool
+    let countersAvailable: Bool
+    let cpu: String?
+    let isHighCPU: Bool
+    let memory: String?
+    let threads: String?
+    let diskRead: String?
+    let diskWrite: String?
+    let runtime: String
+    let architecture: String
+    let isRosetta: Bool
+    let userName: String
+    // Sort keys at display precision (sorting itself is done by ProcessTable on full values).
+    let cpuSort: Double
+    let memorySort: Double
+    let threadSort: Int
+    let diskReadSort: Double
+    let diskWriteSort: Double
+    let runtimeSort: Double
+
+    init(_ p: ProcessSample, now: Date, isAI: Bool) {
+        id = p.id
+        pid = p.pid
+        name = p.name
+        iconSample = ProcessSample(pid: p.pid, name: p.name, executablePath: p.executablePath, isApp: p.isApp)
+        self.isAI = isAI
+        countersAvailable = p.countersAvailable
+        cpu = p.cpuPercent.map(Format.processCPU)
+        isHighCPU = (p.cpuPercent ?? 0) >= ProcessFilter.highCPUThreshold
+        memory = p.memoryFootprint.map { Format.bytes($0) }
+        threads = p.threadCount.map(String.init)
+        diskRead = p.diskReadBytesPerSecond.map(Format.rate)
+        diskWrite = p.diskWriteBytesPerSecond.map(Format.rate)
+        runtime = p.startTime > 0 ? Format.duration(p.runtime(now: now)) : "—"
+        architecture = p.architecture.label
+        isRosetta = p.architecture == .rosetta
+        userName = ScreenshotPrivacy.userName(p.userName)
+        cpuSort = (p.cpuSortValue * 10).rounded() / 10
+        memorySort = (p.memorySortValue / 1_048_576).rounded()
+        threadSort = p.threadSortValue
+        diskReadSort = (p.diskReadSortValue / 1_000).rounded()
+        diskWriteSort = (p.diskWriteSortValue / 1_000).rounded()
+        runtimeSort = -p.startTime.rounded()
+    }
+}
+
+/// Category filter plus a separate "High usage" menu, instead of one crowded six-way control.
+struct ProcessFilterBar: View {
+    @Binding var filter: ProcessFilter
+    var aiCount: Int
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Picker("Show", selection: Binding<ProcessFilter?>(
+                get: { [.all, .apps, .ai, .system].contains(filter) ? filter : nil },
+                set: { if let value = $0 { filter = value } })) {
+                Text("All").tag(ProcessFilter?.some(.all))
+                Text("Apps").tag(ProcessFilter?.some(.apps))
+                Text(aiCount > 0 ? "AI · \(aiCount)" : "AI").tag(ProcessFilter?.some(.ai))
+                Text("System").tag(ProcessFilter?.some(.system))
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            Menu {
+                Toggle("CPU above \(Int(ProcessFilter.highCPUThreshold))%", isOn: Binding(
+                    get: { filter == .highCPU }, set: { filter = $0 ? .highCPU : .all }))
+                Toggle("Memory above \(Format.bytes(ProcessFilter.highMemoryThreshold, decimals: 0))", isOn: Binding(
+                    get: { filter == .highMemory }, set: { filter = $0 ? .highMemory : .all }))
+                if filter == .highCPU || filter == .highMemory {
+                    Divider()
+                    Button("Show all") { filter = .all }
+                }
+            } label: {
+                Label(highUsageTitle, systemImage: "flame")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .foregroundStyle(filter == .highCPU || filter == .highMemory ? AnyShapeStyle(Theme.caution) : AnyShapeStyle(.secondary))
+        }
+    }
+
+    private var highUsageTitle: String {
+        switch filter {
+        case .highCPU: return "High CPU"
+        case .highMemory: return "High memory"
+        default: return "High usage"
+        }
+    }
+}
