@@ -7,12 +7,7 @@ import SiliconPulseSystem
 final class RunningAppsRegistry {
     private(set) var snapshot: [Int32: RunningAppInfo] = [:]
     private var observers: [NSObjectProtocol] = []
-    private let icons = NSCache<NSString, NSImage>()
     private var started = false
-
-    init() {
-        icons.countLimit = 300
-    }
 
     func start() {
         guard !started else { return }
@@ -37,8 +32,19 @@ final class RunningAppsRegistry {
         }
         snapshot = map
     }
+}
 
-    /// App icon for apps, executable icon otherwise. Cached by path.
+/// App and executable icons, cached by path. A plain singleton so views (including Table cells,
+/// where SwiftUI environment objects are not reliably available) need no environment lookups.
+@MainActor
+final class IconCache {
+    static let shared = IconCache()
+    private let icons = NSCache<NSString, NSImage>()
+
+    private init() {
+        icons.countLimit = 300
+    }
+
     func icon(for sample: ProcessSample) -> NSImage? {
         guard let path = sample.executablePath else { return nil }
         let key = path as NSString
@@ -51,7 +57,7 @@ final class RunningAppsRegistry {
         } else {
             image = NSWorkspace.shared.icon(forFile: path)
         }
-        image.size = NSSize(width: 16, height: 16)
+        image.size = NSSize(width: 32, height: 32)
         icons.setObject(image, forKey: key)
         return image
     }

@@ -110,8 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum AppWindows {
     static var openMainAction: (() -> Void)?
 
+    /// Reported by the main window's own content, so no guessing from window identifiers is needed.
+    static weak var registeredMainWindow: NSWindow?
+
     static var mainWindow: NSWindow? {
-        NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(WindowID.main) == true }
+        if let window = registeredMainWindow { return window }
+        return NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(WindowID.main) == true }
     }
 
     static func showMain() {
@@ -127,8 +131,7 @@ enum AppWindows {
     static func mainWindowClosed() {
         // Leave only the menu bar item: no Dock icon while no window is open.
         DispatchQueue.main.async {
-            let anyVisible = NSApp.windows.contains { $0.isVisible && $0.canBecomeMain && $0.identifier?.rawValue.hasPrefix(WindowID.main) == true }
-            if !anyVisible { NSApp.setActivationPolicy(.accessory) }
+            if !(mainWindow?.isVisible ?? false) { NSApp.setActivationPolicy(.accessory) }
         }
     }
 }

@@ -31,7 +31,8 @@ struct ProcessesView: View {
     var body: some View {
         let now = engine.system.timestamp
         let all = engine.processes
-        let rows = ProcessTable.apply(query, to: all, aiPIDs: engine.ai.aiPIDs, now: now)
+        let aiPIDs = engine.ai.aiPIDs
+        let rows = ProcessTable.apply(query, to: all, aiPIDs: aiPIDs, now: now)
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Picker("Filter", selection: $filter) {
@@ -54,7 +55,7 @@ struct ProcessesView: View {
                     HStack(spacing: 6) {
                         ProcessIcon(sample: p)
                         Text(p.name).lineLimit(1).truncationMode(.middle)
-                        if engine.ai.aiPIDs.contains(p.pid) {
+                        if aiPIDs.contains(p.pid) {
                             Image(systemName: "sparkles").font(.system(size: 9)).foregroundStyle(Theme.ai)
                                 .help("Part of a detected local AI workload")
                         }
@@ -172,7 +173,7 @@ struct ProcessesView: View {
                 Label("\(rosetta) under Rosetta", systemImage: "cpu")
             }
             Spacer()
-            Text("Updated every \(Format.fixed(engine.diagnostics.schedule.processes, engine.diagnostics.schedule.processes < 1 ? 1 : 0)) s")
+            Text("Updated every \(Format.fixed(engine.activeSchedule.processes, engine.activeSchedule.processes < 1 ? 1 : 0)) s")
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)

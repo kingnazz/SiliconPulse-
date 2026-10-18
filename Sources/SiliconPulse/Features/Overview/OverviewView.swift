@@ -32,7 +32,7 @@ struct TopMetricsStrip: View {
 
             MetricTile(label: "Memory", value: ready ? Format.fixed(Double(s.memory.used) / 1_073_741_824, 1) : "—",
                        unit: "/ " + Format.fixed(Double(s.memory.total) / 1_073_741_824, 0) + " GB",
-                       detail: "\(Format.percent(s.memory.usedFraction)) used · \(Format.bytes(s.memory.available)) available",
+                       detail: "\(Format.bytes(s.memory.available)) available",
                        info: MetricCatalog.memoryUsed)
                 .padding(.horizontal, 16).stripDivider()
 
@@ -52,15 +52,15 @@ struct TopMetricsStrip: View {
     }
 
     private func gpuDetail(_ gpu: GPUSnapshot) -> String {
-        guard gpu.isAvailable else { return "Not reported on this Mac" }
-        if let memory = gpu.memoryInUse { return "\(Format.bytes(memory)) GPU memory in use" }
+        guard gpu.isAvailable else { return "Not reported" }
+        if let memory = gpu.memoryInUse { return "\(Format.bytes(memory)) in use" }
         return gpu.coreCount.map { "\($0)-core GPU" } ?? gpu.name
     }
 
     private func pressureDetail(_ memory: MemorySnapshot) -> String {
-        var text = "Compressed \(Format.bytes(memory.compressed)) · Swap \(Format.bytes(memory.swapUsed))"
-        if memory.isSwappingOut { text = "Swapping now · " + text }
-        return text
+        if memory.isSwappingOut { return "Swapping now · \(Format.bytes(memory.swapUsed)) swap" }
+        if memory.swapUsed > 0 { return "Swap \(Format.bytes(memory.swapUsed)) · comp. \(Format.bytes(memory.compressed))" }
+        return "Compressed \(Format.bytes(memory.compressed)) · no swap"
     }
 }
 
@@ -80,18 +80,19 @@ struct OverviewCharts: View {
                 Spacer()
                 WindowPicker(selection: $settings.chartWindow)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 280), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 12)], spacing: 12) {
                 ChartCard(title: "CPU", value: Format.percent(s.cpu.usage.total), info: MetricCatalog.cpuTotal,
                           series: [ChartSeries(points: history[.cpu].points(for: window), color: Theme.cpu, label: "CPU")],
                           window: window, maxValue: 1, format: { Format.percent($0) })
                 ChartCard(title: "GPU", value: s.gpu.deviceUtilization.map { Format.percent($0) } ?? "—", info: MetricCatalog.gpuDevice,
                           series: [ChartSeries(points: history[.gpu].points(for: window), color: Theme.gpu, label: "GPU")],
-                          window: window, maxValue: 1, format: { Format.percent($0) })
+                          window: window, maxValue: 1, format: { Format.percent($0) },
+                          emptyMessage: s.gpu.isAvailable ? nil : "GPU utilization is not reported on this Mac")
                 ChartCard(title: "Memory", value: Format.bytes(s.memory.used), info: MetricCatalog.memoryUsed,
                           series: [ChartSeries(points: history[.memoryUsed].points(for: window), color: Theme.memory, label: "Used"),
                                    ChartSeries(points: history[.memoryCompressed].points(for: window), color: Theme.caution, label: "Compressed", dashed: true)],
                           window: window, maxValue: Double(max(1, s.memory.total)), format: { Format.bytes($0) })
-                ChartCard(title: "Disk", value: "↓ \(Format.rate(s.disk.readBytesPerSecond))  ↑ \(Format.rate(s.disk.writeBytesPerSecond))",
+                ChartCard(title: "Disk", value: "R \(Format.rate(s.disk.readBytesPerSecond))  W \(Format.rate(s.disk.writeBytesPerSecond))",
                           info: MetricCatalog.diskThroughput,
                           series: [ChartSeries(points: history[.diskRead].points(for: window), color: Theme.disk, label: "Read"),
                                    ChartSeries(points: history[.diskWrite].points(for: window), color: Theme.disk, label: "Write", dashed: true)],
@@ -209,11 +210,10 @@ struct ProcessMiniList: View {
 struct ProcessIcon: View {
     var sample: ProcessSample
     var size: CGFloat = 16
-    @Environment(MonitorEngine.self) private var engine
 
     var body: some View {
         Group {
-            if let image = engine.icon(for: sample) {
+            if let image = IconCache.shared.icon(for: sample) {
                 Image(nsImage: image).resizable()
             } else {
                 Image(systemName: "gearshape").resizable().foregroundStyle(.tertiary).padding(2)

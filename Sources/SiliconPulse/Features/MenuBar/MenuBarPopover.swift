@@ -3,13 +3,18 @@ import SwiftUI
 
 /// Compact popover shown from the menu bar item.
 struct MenuBarPopover: View {
+    /// Render live values even without a visible window (used for offscreen rendering).
+    var alwaysLive = false
     @Environment(MonitorEngine.self) private var engine
     @Environment(AppSettings.self) private var settings
     @Environment(\.openWindow) private var openWindow
     @State private var token = VisibilityToken()
+    @State private var isVisible = false
 
     var body: some View {
-        let s = engine.system
+        // SwiftUI keeps this view alive while the popover is closed. Reading the per-second system
+        // snapshot only while it is open keeps the closed popover from re-rendering every sample.
+        let s = (isVisible || alwaysLive) ? engine.system : SystemSnapshot.empty
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("SiliconPulse").font(.system(size: 13, weight: .semibold))
@@ -57,6 +62,7 @@ struct MenuBarPopover: View {
         .padding(14)
         .frame(width: 290)
         .background(WindowVisibilityReporter { visible, _ in
+            isVisible = visible
             engine.setPopoverVisible(visible, token: ObjectIdentifier(token))
         })
     }

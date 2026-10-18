@@ -16,6 +16,9 @@ public actor SystemSampler {
     private var lastPower: PowerSnapshot = .unknown
     private var timings: [String: CollectorTiming] = [:]
     private var lastProcesses: [ProcessSample] = []
+    /// Listening ports per candidate, rescanned at most every `portRescanInterval` seconds.
+    private var portCache: [ProcessIdentity: (ports: [UInt16], time: UInt64)] = [:]
+    private let portRescanInterval: UInt64 = 15_000_000_000
 
     public init() {}
 
@@ -67,17 +70,30 @@ public actor SystemSampler {
 
     /// AI tier: arguments, selected environment and listening ports for candidate processes only.
     public func aiCandidates(from samples: [ProcessSample]) -> [AIProcessInfo] {
-        measure("AI candidates") {
+        let now = Clock.uptimeNanoseconds()
+        let result = measure("AI candidates") {
             samples.filter(AICandidateFilter.isCandidate).map { sample in
                 let args = sample.countersAvailable ? processes.arguments(for: sample.id) : nil
                 var environment: [String: String] = [:]
                 if let value = args?.environment["OLLAMA_HOST"] { environment["OLLAMA_HOST"] = value }
-                let ports = sample.countersAvailable ? processes.listeningSockets(pid: sample.pid).map(\.port) : []
                 return AIProcessInfo(sample: sample, arguments: args?.arguments ?? [], environment: environment,
-                                     listeningPorts: Array(Set(ports)).sorted())
+                                     listeningPorts: sample.countersAvailable ? listeningPorts(for: sample.id, now: now) : [])
             }
         }
+        let alive = Set(samples.map(\.id))
+        portCache = portCache.filter { alive.contains($0.key) }
+        return result
     }
+
+    private func listeningPorts(for identity: ProcessIdentity, now: UInt64) -> [UInt16] {
+        if let cached = portCache[identity], now &- cached.time < portRescanInterval { return cached.ports }
+        let ports = Array(Set(processes.listeningSockets(pid: identity.pid).map(\.port))).sorted()
+        portCache[identity] = (ports, now)
+        return ports
+    }
+
+    /// Forces the next AI pass to rescan listening ports (e.g. the user asked for a refresh).
+    public func invalidatePortCache() { portCache.removeAll() }
 
     /// Inspector detail for one process.
     public func details(for identity: ProcessIdentity) -> ProcessDetails {

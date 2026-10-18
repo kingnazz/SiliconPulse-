@@ -209,7 +209,7 @@ private struct DetectionStatusPanel: View {
                     .font(.system(size: 12))
                 }
                 if lastRefresh != .distantPast {
-                    Text("Checked \(lastRefresh.formatted(date: .omitted, time: .standard)) in \(Format.fixed(duration * 1000, 0)) ms · every \(Format.fixed(engine.diagnostics.schedule.aiDiscovery, 0)) s while visible. Only 127.0.0.1 is contacted.")
+                    Text("Checked \(lastRefresh.formatted(date: .omitted, time: .standard)) in \(Format.fixed(duration * 1000, 0)) ms · every \(Format.fixed(engine.activeSchedule.aiDiscovery, 0)) s while visible. Only 127.0.0.1 is contacted.")
                         .font(.system(size: 10.5))
                         .foregroundStyle(.tertiary)
                         .padding(.top, 4)

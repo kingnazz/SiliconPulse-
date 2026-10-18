@@ -131,6 +131,8 @@ struct ChartCard: View {
     var maxValue: Double?
     var format: (Double) -> String
     var height: CGFloat = 86
+    /// Shown over the plot when there is no data, e.g. a metric this Mac does not report.
+    var emptyMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -141,6 +143,11 @@ struct ChartCard: View {
                 Text(value).font(.numericMedium).foregroundStyle(.primary)
             }
             LineChart(series: series, window: window, maxValue: maxValue, format: format, height: height)
+                .overlay {
+                    if let emptyMessage, series.allSatisfy({ $0.points.isEmpty }) {
+                        Text(emptyMessage).font(.system(size: 11)).foregroundStyle(.tertiary)
+                    }
+                }
             if series.count > 1 {
                 HStack(spacing: 10) {
                     ForEach(series.indices, id: \.self) { index in

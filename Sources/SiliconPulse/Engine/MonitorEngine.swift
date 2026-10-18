@@ -26,6 +26,13 @@ final class MonitorEngine {
     private(set) var isRunning = false
     private(set) var hasSystemSample = false
 
+    // Narrow values for always-visible chrome (sidebar, toolbar). They change rarely, so views that
+    // read only these are not re-rendered on every sample.
+    private(set) var activeSchedule = SamplingSchedule(system: 1, processes: 2, aiDiscovery: 5, slow: 10)
+    private(set) var memoryPressure: MemoryPressure = .unknown
+    private(set) var loadedModelCount = 0
+    private(set) var machineSummary = ""
+
     /// Section the main window shows; set by the sidebar.
     var section: AppSection = .overview {
         didSet { if section != oldValue { updateDemand() } }
@@ -63,7 +70,7 @@ final class MonitorEngine {
         })
     }
 
-    var schedule: SamplingSchedule { SamplingPolicy.schedule(for: demand, base: settings.samplingInterval) }
+    private var schedule: SamplingSchedule { SamplingPolicy.schedule(for: demand, base: settings.samplingInterval) }
 
     var isDashboardVisible: Bool { !visibleDashboards.isEmpty }
 
@@ -92,7 +99,7 @@ final class MonitorEngine {
         while !Task.isCancelled {
             let now = Date()
             let schedule = self.schedule
-            diagnostics.schedule = schedule
+            publish(schedule)
 
             if isDue(.slow, now) {
                 let power = await sampler.samplePower()
@@ -170,7 +177,7 @@ final class MonitorEngine {
                                   section: section, menuBarShowsLiveValues: settings.menuBarShowsLiveValues,
                                   lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled)
         let new = schedule
-        diagnostics.schedule = new
+        publish(new)
         // Pull tiers forward when they should now run sooner, then wake the loop.
         let now = Date()
         var pulled = false
@@ -188,6 +195,11 @@ final class MonitorEngine {
         if pulled { wake() }
     }
 
+    private func publish(_ schedule: SamplingSchedule) {
+        if activeSchedule != schedule { activeSchedule = schedule }
+        diagnostics.schedule = schedule
+    }
+
     // MARK: Sampling
 
     private func sampleSystem() async {
@@ -196,7 +208,11 @@ final class MonitorEngine {
         var updated = snapshot
         updated.thermal.power = system.thermal.power
         system = updated
-        hasSystemSample = true
+        if !hasSystemSample { hasSystemSample = true }
+        if memoryPressure != updated.memory.pressure { memoryPressure = updated.memory.pressure }
+        if machineSummary.isEmpty, updated.memory.total > 0 {
+            machineSummary = updated.cpu.topology.brand + " · " + Format.bytes(updated.memory.total, decimals: 0)
+        }
         history.record(updated)
         diagnostics.systemSamples += 1
         diagnostics.historyPoints = history.storedPointCount
@@ -236,6 +252,8 @@ final class MonitorEngine {
             guard let self else { return }
             self.ai = result
             self.aiTask = nil
+            let loaded = result.workloads.filter { $0.state == .modelLoaded }.count
+            if self.loadedModelCount != loaded { self.loadedModelCount = loaded }
             self.diagnostics.aiRefreshes += 1
             self.diagnostics.lastAIRefreshDuration = result.duration
             self.updateMenuBarTitle()
@@ -243,7 +261,10 @@ final class MonitorEngine {
     }
 
     /// Re-run AI detection now (e.g. the user just started a runner).
-    func refreshAINow() { requestImmediate(.processes, .ai) }
+    func refreshAINow() {
+        Task { [sampler] in await sampler.invalidatePortCache() }
+        requestImmediate(.processes, .ai)
+    }
 
     private func updateMenuBarTitle() {
         let title = MenuBarFormatter.title(items: Array(settings.menuBarItems), snapshot: system, featured: ai.featured,
@@ -295,8 +316,6 @@ final class MonitorEngine {
         if let memory = sample.memoryFootprint { current.memory.append(Double(memory), at: now) }
         inspected = current
     }
-
-    func icon(for sample: ProcessSample) -> NSImage? { apps.icon(for: sample) }
 
     // MARK: Profiling support
 

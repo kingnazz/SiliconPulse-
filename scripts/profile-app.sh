@@ -28,6 +28,17 @@ echo "Launched SiliconPulse (pid $PID)"
 } > "$OUT/ps.log" &
 PS_LOGGER=$!
 
+# Call-tree samples of the app itself, taken while the dashboard is visible and while it is hidden.
+# Phase timing comes from ProfileRunner: overview 6–36 s, window closed ≈ 110–150 s.
+take_sample() {
+  local at="$1" name="$2"
+  while [ "$(( $(date +%s) - START ))" -lt "$at" ]; do kill -0 "$PID" 2>/dev/null || return; sleep 1; done
+  sample "$PID" 8 -file "$OUT/sample-$name.txt" > /dev/null 2>&1 || true
+}
+START=$(date +%s)
+( take_sample 14 overview; take_sample 118 hidden ) &
+SAMPLER=$!
+
 # The scripted run takes about three and a half minutes; stop it if it hangs.
 for _ in $(seq 1 360); do
   kill -0 "$PID" 2>/dev/null || break
@@ -41,12 +52,18 @@ if kill -0 "$PID" 2>/dev/null; then
 fi
 wait "$PID"
 STATUS=$?
-kill "$PS_LOGGER" 2>/dev/null || true
+kill "$PS_LOGGER" "$SAMPLER" 2>/dev/null || true
 
 echo "Exit status: $STATUS"
 echo "---- ps cross-check ----"
 cat "$OUT/ps.log"
 echo "---- report ----"
 cat "$OUT/report.md" 2>/dev/null || { echo "No report produced"; cat "$OUT/app-stdout.log"; exit 1; }
+for f in "$OUT"/sample-*.txt; do
+  [ -f "$f" ] || continue
+  echo "---- $(basename "$f"): heaviest frames (top of stack) ----"
+  sed -n '/Sort by top of stack/,/Binary Images/p' "$f" | head -45
+done
 ls -la "$OUT"
-if grep -q "Problems: none" "$OUT/report.md"; then exit 0; else echo "Profile reported problems"; exit 1; fi
+if [ "$STATUS" -ne 0 ]; then echo "SiliconPulse exited with status $STATUS"; cat "$OUT/app-stdout.log"; exit 1; fi
+if ! grep -q "Problems: none" "$OUT/report.md"; then echo "Profile reported problems"; exit 1; fi

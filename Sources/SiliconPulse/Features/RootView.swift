@@ -20,6 +20,7 @@ struct RootView: View {
         }
         .frame(minWidth: 920, minHeight: 620)
         .background(WindowVisibilityReporter { visible, window in
+            if let window { AppWindows.registeredMainWindow = window }
             engine.setDashboardVisible(visible, token: ObjectIdentifier(visibilityToken))
             if !visible && window == nil { AppWindows.mainWindowClosed() }
         })
@@ -98,12 +99,12 @@ private struct SidebarRow: View {
     @ViewBuilder private var badge: some View {
         switch section {
         case .ai:
-            let loaded = engine.ai.workloads.filter { $0.state == .modelLoaded }.count
+            let loaded = engine.loadedModelCount
             if loaded > 0 {
                 Text("\(loaded)").font(.system(size: 10, weight: .semibold).monospacedDigit()).foregroundStyle(.secondary)
             }
         case .memory:
-            let pressure = engine.system.memory.pressure
+            let pressure = engine.memoryPressure
             if pressure == .warning || pressure == .critical {
                 Circle().fill(Theme.color(for: pressure)).frame(width: 6, height: 6)
             }
@@ -117,7 +118,6 @@ private struct SidebarFooter: View {
     @Environment(MonitorEngine.self) private var engine
 
     var body: some View {
-        let memory = engine.system.memory
         VStack(alignment: .leading, spacing: 6) {
             Divider()
             HStack(spacing: 6) {
@@ -125,8 +125,8 @@ private struct SidebarFooter: View {
                 Text("Local only · no telemetry").foregroundStyle(.secondary)
             }
             .font(.system(size: 10.5))
-            if memory.total > 0 {
-                Text(engine.system.cpu.topology.brand + " · " + Format.bytes(memory.total, decimals: 0))
+            if !engine.machineSummary.isEmpty {
+                Text(engine.machineSummary)
                     .font(.system(size: 10.5))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -142,7 +142,7 @@ private struct SamplingStatus: View {
     @Environment(MonitorEngine.self) private var engine
 
     var body: some View {
-        let schedule = engine.diagnostics.schedule
+        let schedule = engine.activeSchedule
         HStack(spacing: 6) {
             Circle()
                 .fill(engine.isRunning ? Theme.good : Theme.muted)

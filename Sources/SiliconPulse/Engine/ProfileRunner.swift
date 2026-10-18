@@ -192,7 +192,7 @@ final class ProfileRunner {
     }
 
     private func renderPopover() {
-        let view = MenuBarPopover()
+        let view = MenuBarPopover(alwaysLive: true)
             .environment(engine)
             .environment(engine.settings)
             .background(Color(nsColor: .windowBackgroundColor))
