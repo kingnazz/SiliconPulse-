@@ -9,7 +9,7 @@ Swift + SwiftUI. No Electron, no web views, no telemetry.
 
 </div>
 
-**[Download for Mac](https://github.com/kingnazz/SiliconPulse-/releases/latest/download/SiliconPulse.dmg)** · macOS 14 or later · [Release notes](https://github.com/kingnazz/SiliconPulse-/releases/latest)
+**[Download for Mac](https://github.com/kingnazz/SiliconPulse-/releases/latest/download/SiliconPulse.dmg)** · macOS 14 or later · [Website](https://kingnazz.github.io/SiliconPulse-/) · [Release notes](https://github.com/kingnazz/SiliconPulse-/releases/latest)
 
 ---
 

@@ -1,0 +1,60 @@
+name: Website
+
+# Builds the site from site/ plus the app's screenshots and icon, and publishes it to GitHub Pages
+# from main. Pull requests only build it and check that every local link resolves.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -R site/. _site/
+          cp -R docs/screenshots _site/screenshots
+          cp Resources/AppIcon.png _site/icon.png
+          touch _site/.nojekyll
+      - name: Check local links
+        run: |
+          python3 - <<'EOF'
+          import os, re, sys
+          html = open("_site/index.html").read()
+          refs = set(re.findall(r'(?:src|href|srcset)="([^"#:]+)"', html))
+          missing = [r for r in refs if not os.path.exists(os.path.join("_site", r))]
+          print(f"{len(refs)} local references")
+          if missing:
+              sys.exit(f"Missing files: {missing}")
+          EOF
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - id: deployment
+        uses: actions/deploy-pages@v4
