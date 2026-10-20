@@ -102,7 +102,7 @@ jobs:
             echo
             echo "## Install"
             echo
-            echo "Requires an Apple Silicon Mac with macOS 14 or later. Open \`SiliconPulse.dmg\` and drag SiliconPulse to Applications."
+            echo "Requires macOS 14 or later; the app is universal (Apple Silicon and Intel). Open \`SiliconPulse.dmg\` and drag SiliconPulse to Applications."
             if grep -q "notarized=true" build/release/signing.txt; then
               echo
               echo "This build is signed with a Developer ID and notarized by Apple."

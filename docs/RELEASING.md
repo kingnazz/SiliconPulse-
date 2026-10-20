@@ -16,6 +16,10 @@ Asset names carry no version, so these always point at the newest release:
 - `https://github.com/kingnazz/SiliconPulse-/releases/latest/download/SiliconPulse.zip`
 - `https://github.com/kingnazz/SiliconPulse-/releases/latest` (the release page and notes)
 
+## Website
+
+`site/` is the website, published to https://kingnazz.github.io/SiliconPulse-/ by `.github/workflows/pages.yml` on every push to `main`. The workflow adds `docs/screenshots/` and the app icon, so new screenshots appear on the site automatically. Its download buttons use the stable link above, so a new release needs no site change.
+
 ## Signing and notarization
 
 Without signing secrets, the release is **ad-hoc signed**. macOS then blocks the first launch of a downloaded copy until the user clicks **Open Anyway** in System Settings › Privacy & Security; the release notes say so automatically.
