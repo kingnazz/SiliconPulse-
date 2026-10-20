@@ -1,0 +1,137 @@
+name: Release
+
+# Pull requests: build and verify the release DMG (dry run, uploaded as an artifact).
+# Push to main: if no release exists for the version in VERSION, build it and publish GitHub release
+# v<VERSION> with SiliconPulse.dmg, SiliconPulse.zip and SHA256SUMS.txt. Asset names carry no version, so
+#   https://github.com/<owner>/<repo>/releases/latest/download/SiliconPulse.dmg
+# always serves the newest release. To ship a new version, bump VERSION and add a CHANGELOG.md section.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Package${{ github.event_name == 'pull_request' && ' (dry run)' || ' and publish' }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          grep -q "^## $version" CHANGELOG.md || { echo "CHANGELOG.md has no '## $version' section"; exit 1; }
+          if gh release view "v$version" > /dev/null 2>&1; then exists=true; else exists=false; fi
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "Version $version, release exists: $exists"
+
+      - name: Import Developer ID certificate (when configured)
+        id: signing
+        if: github.event_name != 'pull_request'
+        env:
+          CERTIFICATE_P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          if [ -z "$CERTIFICATE_P12_BASE64" ] || [ -z "$SIGN_IDENTITY" ]; then
+            echo "No signing secrets: the release will be ad-hoc signed."
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "identity=$SIGN_IDENTITY" >> "$GITHUB_OUTPUT"
+
+      - name: Build, sign and package
+        if: github.event_name == 'pull_request' || steps.version.outputs.exists != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SIGN_IDENTITY: ${{ steps.signing.outputs.identity || '-' }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
+        run: scripts/package-release.sh
+
+      - name: Smoke test the packaged app
+        if: github.event_name == 'pull_request' || steps.version.outputs.exists != 'true'
+        run: |
+          MOUNT="$(mktemp -d)"
+          hdiutil attach build/release/SiliconPulse.dmg -nobrowse -readonly -mountpoint "$MOUNT" > /dev/null
+          cp -R "$MOUNT/SiliconPulse.app" "$RUNNER_TEMP/"
+          hdiutil detach "$MOUNT" > /dev/null
+          defaults write app.siliconpulse.SiliconPulse hasCompletedOnboarding -bool true
+          "$RUNNER_TEMP/SiliconPulse.app/Contents/MacOS/SiliconPulse" > smoke.log 2>&1 &
+          PID=$!
+          sleep 12
+          kill -0 $PID || { echo "The packaged app exited early"; cat smoke.log; exit 1; }
+          ps -o pid,rss,%cpu,command -p $PID
+          kill $PID
+
+      - name: Release notes
+        if: github.event_name != 'pull_request' && steps.version.outputs.exists != 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          awk -v v="## $VERSION" '$0 ~ "^## " { if (found) exit; if (index($0, v) == 1) { found = 1; next } } found' CHANGELOG.md > notes.md
+          {
+            echo
+            echo "## Install"
+            echo
+            echo "Requires an Apple Silicon Mac with macOS 14 or later. Open \`SiliconPulse.dmg\` and drag SiliconPulse to Applications."
+            if grep -q "notarized=true" build/release/signing.txt; then
+              echo
+              echo "This build is signed with a Developer ID and notarized by Apple."
+            else
+              echo
+              echo "This build is not notarized yet, so macOS blocks it the first time. Open it once from Applications, then go to **System Settings › Privacy & Security** and click **Open Anyway** (or run \`xattr -dr com.apple.quarantine /Applications/SiliconPulse.app\`)."
+            fi
+            echo
+            echo "Checksums are in \`SHA256SUMS.txt\`."
+          } >> notes.md
+          cat notes.md
+
+      - name: Publish release
+        if: github.event_name != 'pull_request' && steps.version.outputs.exists != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "v$VERSION" \
+            build/release/SiliconPulse.dmg build/release/SiliconPulse.zip build/release/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" --title "SiliconPulse $VERSION" --notes-file notes.md --latest
+          echo "Download: https://github.com/${{ github.repository }}/releases/latest/download/SiliconPulse.dmg" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload packaged build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ steps.version.outputs.version }}
+          path: |
+            build/release/
+            smoke.log
+          if-no-files-found: ignore

@@ -98,7 +98,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if let directory = options.screenshotDirectory, let engine = AppDelegate.engine {
             screenshotter = ScreenshotRunner(engine: engine, directory: directory)
             screenshotter?.start()
+        } else if Self.launchedAsLoginItem, AppDelegate.engine?.settings.hasCompletedOnboarding == true {
+            // Opened at login: stay in the menu bar instead of putting a window in front of the user.
+            DispatchQueue.main.async {
+                AppWindows.mainWindow?.close()
+                NSApp.setActivationPolicy(.accessory)
+            }
         }
+    }
+
+    /// macOS marks the launch Apple event when it opens an app as a login item.
+    private static var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent, event.eventID == kAEOpenApplication else { return false }
+        return event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

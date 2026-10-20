@@ -11,6 +11,14 @@ struct SettingsView: View {
         @Bindable var settings = settings
         Form {
             Section {
+                LaunchAtLoginRow()
+            } header: {
+                Text("General")
+            } footer: {
+                SettingsFootnote("When opened at login, SiliconPulse starts quietly in the menu bar; click its icon to open the window.")
+            }
+
+            Section {
                 Picker("Refresh interval", selection: $settings.samplingInterval) {
                     ForEach(SamplingInterval.allCases) { interval in Text(interval.label).tag(interval) }
                 }
@@ -91,7 +99,13 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledContent("Version", value: Self.version)
+                LabeledContent("Version") {
+                    HStack(spacing: 10) {
+                        Text(Self.version)
+                        // Opens the releases page in the browser; SiliconPulse itself never contacts a server.
+                        Link("Check for Updates…", destination: Self.releasesURL)
+                    }
+                }
                 LabeledContent("Interfaces", value: "Mach, sysctl, libproc, IOKit, IOPowerSources")
             } header: {
                 Text("About")
@@ -118,6 +132,8 @@ struct SettingsView: View {
         if !settings.customEndpoints.contains(value) { settings.customEndpoints.append(value) }
         newEndpoint = ""
     }
+
+    static let releasesURL = URL(string: "https://github.com/kingnazz/SiliconPulse-/releases/latest")!
 
     static var version: String {
         let info = Bundle.main.infoDictionary
