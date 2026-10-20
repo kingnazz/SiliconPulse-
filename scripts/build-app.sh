@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 # Builds SiliconPulse in release mode and wraps the executable in a signed .app bundle.
+#
+#   VERSION        marketing version (default: the VERSION file)
+#   SIGN_IDENTITY  codesign identity, e.g. "Developer ID Application: Name (TEAMID)"; default "-" (ad-hoc)
+#   UNIVERSAL=1    build for Apple Silicon and Intel (release downloads)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${CONFIG:-release}"
 APP="build/SiliconPulse.app"
-VERSION="${VERSION:-1.0.0}"
+VERSION="${VERSION:-$(cat VERSION 2>/dev/null || echo 0.0.0)}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD 2>/dev/null || echo 1)}"
 
-swift build -c "$CONFIG" --product SiliconPulse
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/SiliconPulse"
+ARCH_FLAGS=()
+[ "${UNIVERSAL:-0}" = "1" ] && ARCH_FLAGS=(--arch arm64 --arch x86_64)
+swift build -c "$CONFIG" --product SiliconPulse ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"}
+BIN="$(swift build -c "$CONFIG" --show-bin-path ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"})/SiliconPulse"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -26,7 +33,12 @@ if [ -f Resources/AppIcon.png ] && command -v iconutil >/dev/null; then
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 fi
 
-# Ad-hoc signature so the app launches locally; distribute with a Developer ID signature instead.
-codesign --force --sign - --timestamp=none "$APP"
+# Hardened runtime (required for notarization). Ad-hoc ("-") runs locally; downloads need a Developer ID.
+if [ "$SIGN_IDENTITY" = "-" ]; then
+  codesign --force --options runtime --sign - --timestamp=none "$APP"
+else
+  codesign --force --options runtime --sign "$SIGN_IDENTITY" --timestamp "$APP"
+fi
+codesign --verify --strict "$APP"
 (cd build && rm -f SiliconPulse.zip && ditto -c -k --keepParent SiliconPulse.app SiliconPulse.zip)
-echo "Built $APP"
+echo "Built $APP ($VERSION, build $BUILD_NUMBER, signed with ${SIGN_IDENTITY/#-/ad-hoc})"

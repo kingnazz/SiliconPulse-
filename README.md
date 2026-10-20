@@ -9,6 +9,8 @@ Swift + SwiftUI. No Electron, no web views, no telemetry.
 
 </div>
 
+**[Download for Mac](https://github.com/kingnazz/SiliconPulse-/releases/latest/download/SiliconPulse.dmg)** · macOS 14 or later · [Release notes](https://github.com/kingnazz/SiliconPulse-/releases/latest)
+
 ---
 
 SiliconPulse answers, at a glance:
@@ -84,10 +86,20 @@ System GPU utilization is never attributed to a model.
 
 SiliconPulse is local-only. It has no analytics, telemetry, accounts, cloud backend, tracking or advertising SDKs, and it uploads nothing. Its only network traffic is HTTP to AI runners on `127.0.0.1`. History lives in memory and is discarded when you quit; there is no database.
 
+## Install
+
+1. Download [SiliconPulse.dmg](https://github.com/kingnazz/SiliconPulse-/releases/latest/download/SiliconPulse.dmg).
+2. Open it and drag SiliconPulse to Applications.
+3. Open SiliconPulse from Applications. It lives in the menu bar; Settings can open it at login.
+
+If macOS says it cannot verify the developer, the release you downloaded is not notarized yet (its notes say so). Go to **System Settings › Privacy & Security** and click **Open Anyway**. You only need to do this once.
+
+SiliconPulse does not update itself or contact any server; **Settings › About › Check for Updates…** opens the releases page in your browser.
+
 ## System requirements
 
 - macOS 14 Sonoma or later
-- Apple Silicon recommended. It runs on Intel Macs, but P/E core and per-process GPU features are Apple Silicon specific.
+- Apple Silicon recommended. The download is a universal app that also runs on Intel Macs, but P/E core and per-process GPU features are Apple Silicon specific.
 - To build: Xcode 16 or later (Swift 5.10+ toolchain)
 
 ## Build
@@ -97,6 +109,7 @@ git clone https://github.com/kingnazz/SiliconPulse-.git
 cd SiliconPulse-
 scripts/build-app.sh          # release build → build/SiliconPulse.app (ad-hoc signed)
 open build/SiliconPulse.app
+scripts/package-release.sh    # universal DMG + zip as published (see docs/RELEASING.md)
 ```
 
 Development:
